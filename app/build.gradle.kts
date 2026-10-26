@@ -12,7 +12,7 @@ android {
 
     defaultConfig {
         applicationId = "id.sch.mts241alikhlash.cbt"
-        minSdk = 26
+        minSdk = 24
         targetSdk = 35
         versionCode = 1
         versionName = "1.0.0"
