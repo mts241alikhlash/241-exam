@@ -76,6 +76,25 @@ fun ExamScreen(
     onFinish: () -> Unit
 ) {
     val state by viewModel.uiState.collectAsState()
+    ExamContent(
+        state = state,
+        onSelectAnswer = viewModel::selectAnswer,
+        onToggleDoubtful = viewModel::toggleDoubtful,
+        onGoToIndex = viewModel::goToIndex,
+        onSubmit = viewModel::submitExam,
+        onFinish = onFinish
+    )
+}
+
+@Composable
+fun ExamContent(
+    state: ExamUiState,
+    onSelectAnswer: (String, String) -> Unit,
+    onToggleDoubtful: (String) -> Unit,
+    onGoToIndex: (Int) -> Unit,
+    onSubmit: () -> Unit,
+    onFinish: () -> Unit
+) {
     var showConfirmDialog by remember { mutableStateOf(false) }
 
     if (state.isSubmitted) {
@@ -129,7 +148,7 @@ fun ExamScreen(
                 Button(
                     onClick = {
                         showConfirmDialog = false
-                        viewModel.submitExam()
+                        onSubmit()
                     },
                     shape = RoundedCornerShape(8.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = BrandNavy)
@@ -191,7 +210,7 @@ fun ExamScreen(
                                 .padding(horizontal = 6.dp, vertical = 2.dp)
                         ) {
                             Text(
-                                text = "CBT",
+                                text = "ASSESSMENT",
                                 fontFamily = DMSansFontFamily,
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 10.sp,
@@ -254,7 +273,7 @@ fun ExamScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         OutlinedButton(
-                            onClick = { viewModel.goToIndex(state.currentIndex - 1) },
+                            onClick = { onGoToIndex(state.currentIndex - 1) },
                             enabled = state.currentIndex > 0,
                             shape = RoundedCornerShape(8.dp),
                             modifier = Modifier.height(38.dp)
@@ -271,7 +290,7 @@ fun ExamScreen(
                         val isDoubt = state.doubtfuls.contains(currentQ.id)
 
                         OutlinedButton(
-                            onClick = { viewModel.toggleDoubtful(currentQ.id) },
+                            onClick = { onToggleDoubtful(currentQ.id) },
                             shape = RoundedCornerShape(8.dp),
                             border = androidx.compose.foundation.BorderStroke(
                                 1.dp,
@@ -300,7 +319,7 @@ fun ExamScreen(
 
                         if (state.currentIndex < state.questions.size - 1) {
                             Button(
-                                onClick = { viewModel.goToIndex(state.currentIndex + 1) },
+                                onClick = { onGoToIndex(state.currentIndex + 1) },
                                 shape = RoundedCornerShape(8.dp),
                                 colors = ButtonDefaults.buttonColors(containerColor = BrandNavy),
                                 modifier = Modifier.height(38.dp)
@@ -386,7 +405,7 @@ fun ExamScreen(
                                     if (isCurrent) BrandNavy else BorderSubtle,
                                     RoundedCornerShape(6.dp)
                                 )
-                                .clickable { viewModel.goToIndex(index) },
+                                .clickable { onGoToIndex(index) },
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
@@ -482,7 +501,7 @@ fun ExamScreen(
                                         .background(
                                             color = if (isSelected) BrandNavySubtle else BrandSurface
                                         )
-                                        .clickable { viewModel.selectAnswer(currentQ.id, choice) }
+                                        .clickable { onSelectAnswer(currentQ.id, choice) }
                                         .padding(horizontal = 14.dp, vertical = 12.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {

@@ -9,7 +9,7 @@ import androidx.compose.runtime.*
 import id.sch.mts241alikhlash.cbt.ui.screens.ExamScreen
 import id.sch.mts241alikhlash.cbt.ui.screens.ExamViewModel
 import id.sch.mts241alikhlash.cbt.ui.screens.TokenScreen
-import id.sch.mts241alikhlash.cbt.ui.theme.CBTTheme
+import id.sch.mts241alikhlash.cbt.ui.theme.AssessmentTheme
 
 class MainActivity : ComponentActivity() {
 
@@ -27,7 +27,7 @@ class MainActivity : ComponentActivity() {
         val app = application as CBTApplication
 
         setContent {
-            CBTTheme {
+            AssessmentTheme {
                 var currentSessionId by remember { mutableStateOf<String?>(null) }
 
                 if (currentSessionId == null) {

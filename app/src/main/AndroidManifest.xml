@@ -8,7 +8,7 @@
         android:name=".CBTApplication"
         android:allowBackup="false"
         android:icon="@android:drawable/sym_def_app_icon"
-        android:label="241 CBT Exam"
+        android:label="241 Assessment"
         android:roundIcon="@android:drawable/sym_def_app_icon"
         android:supportsRtl="true"
         android:theme="@android:style/Theme.Material.NoActionBar"

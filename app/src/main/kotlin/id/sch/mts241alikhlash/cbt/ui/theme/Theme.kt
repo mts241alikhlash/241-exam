@@ -20,10 +20,15 @@ private val LightColorScheme = lightColorScheme(
 )
 
 @Composable
-fun CBTTheme(content: @Composable () -> Unit) {
+fun AssessmentTheme(content: @Composable () -> Unit) {
     MaterialTheme(
         colorScheme = LightColorScheme,
         typography = AppTypography,
         content = content
     )
+}
+
+@Composable
+fun CBTTheme(content: @Composable () -> Unit) {
+    AssessmentTheme(content = content)
 }

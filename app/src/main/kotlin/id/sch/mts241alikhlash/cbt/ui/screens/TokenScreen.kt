@@ -169,7 +169,7 @@ fun TokenScreen(
                         },
                         placeholder = {
                             Text(
-                                text = "Contoh: CBT-01",
+                                text = "Contoh: SESI-01",
                                 fontFamily = DMSansFontFamily,
                                 fontSize = 13.sp
                             )
@@ -284,7 +284,7 @@ fun TokenScreen(
                 Spacer(modifier = Modifier.height(6.dp))
 
                 Text(
-                    text = "Platform 241 Academic · MTs 241 Al-Ikhlash",
+                    text = "241 Assessment · MTs 241 Al-Ikhlash",
                     fontSize = 11.sp,
                     fontFamily = DMSansFontFamily,
                     color = TextMuted,
