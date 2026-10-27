@@ -19,7 +19,12 @@ class ExamRepository(
     private val api: ExamApiService,
     private val dao: AnswerDao,
     private val questionDao: QuestionDao,
-    private val now: () -> Long = { System.currentTimeMillis() }
+    private val now: () -> Long = { System.currentTimeMillis() },
+    private val log: (String, Throwable?) -> Unit = { message, error ->
+        // java.util.logging works on both Android and the JVM unit-test classpath,
+        // unlike android.util.Log which is a throwing stub in local tests.
+        LOGGER.log(java.util.logging.Level.WARNING, message, error)
+    }
 ) {
     fun observeAnswers(sessionId: String): Flow<List<CachedAnswerEntity>> {
         return dao.observeAnswers(sessionId)
@@ -40,10 +45,7 @@ class ExamRepository(
                 // A blank payload must not destroy a usable offline cache.
                 Result.success(cached.map { it.toDto() })
             } else {
-                questionDao.replaceForSession(
-                    sessionId,
-                    remote.map { it.toEntity(sessionId, now()) }
-                )
+                cacheQuestions(sessionId, remote)
                 Result.success(remote)
             }
         } catch (cancellation: CancellationException) {
@@ -54,6 +56,20 @@ class ExamRepository(
             } else {
                 Result.failure(IllegalStateException(EMPTY_CACHE_MESSAGE, error))
             }
+        }
+    }
+
+    /**
+     * Writes the freshly downloaded paper to the cache without letting a cache failure
+     * turn a successful download into a blank screen: the network result still wins.
+     */
+    private suspend fun cacheQuestions(sessionId: String, remote: List<StudentQuestionDto>) {
+        try {
+            questionDao.replaceForSession(sessionId, remote.map { it.toEntity(sessionId, now()) })
+        } catch (cancellation: CancellationException) {
+            throw cancellation
+        } catch (error: Exception) {
+            log("Failed to cache questions for $sessionId", error)
         }
     }
 
@@ -72,33 +88,48 @@ class ExamRepository(
             sessionId = sessionId,
             answer = answer,
             isDoubtful = isDoubtful,
-            isSynced = false
+            isSynced = false,
+            updatedAt = now()
         )
         dao.saveAnswer(entity)
 
         runCatching {
             api.saveAnswer(sessionId, SubmitAnswerRequest(questionId, answer))
         }.onSuccess {
-            dao.markSynced(questionId)
+            // Only this exact revision may be marked: a newer edit made while the
+            // request was in flight must stay pending.
+            dao.markSynced(sessionId, questionId, answer, entity.updatedAt)
         }
     }
 
+    /**
+     * Uploads every pending answer and then re-reads the queue.
+     *
+     * [SyncReport.failed] is the *authoritative* count of rows still unsynced after the
+     * pass, not the number of errors observed. That closes the gap where a student edits
+     * an answer mid-sync and the snapshot taken before the loop goes stale.
+     */
     suspend fun syncPending(sessionId: String): SyncReport {
         val pending = dao.getUnsyncedAnswers(sessionId)
         var synced = 0
-        var failed = 0
         for (item in pending) {
             try {
                 api.saveAnswer(sessionId, SubmitAnswerRequest(item.questionId, item.answer))
-                dao.markSynced(item.questionId)
-                synced++
+                val marked = dao.markSynced(
+                    sessionId = item.sessionId,
+                    questionId = item.questionId,
+                    answer = item.answer,
+                    updatedAt = item.updatedAt
+                )
+                if (marked > 0) synced++
             } catch (cancellation: CancellationException) {
                 throw cancellation
-            } catch (_: Exception) {
-                failed++
+            } catch (error: Exception) {
+                log("Failed to sync answer ${item.questionId}", error)
             }
         }
-        return SyncReport(synced, failed)
+        val remaining = dao.countUnsyncedAnswers(sessionId)
+        return SyncReport(synced = synced, failed = remaining)
     }
 
     private suspend fun loadCache(sessionId: String): List<CachedQuestionEntity> =
@@ -119,6 +150,8 @@ class ExamRepository(
         const val EMPTY_CACHE_MESSAGE = "Tidak dapat memuat soal. Periksa koneksi."
         const val CACHE_TTL_MS = 24L * 60L * 60L * 1000L
         internal val json = Json { ignoreUnknownKeys = true }
+        private val LOGGER: java.util.logging.Logger =
+            java.util.logging.Logger.getLogger("ExamRepository")
     }
 }
 

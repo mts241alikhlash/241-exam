@@ -19,13 +19,34 @@ import java.io.IOException
 import kotlin.coroutines.cancellation.CancellationException
 
 class QuestionCacheTest {
+    private val now = 1_700_000_000_000L
+
     @Test
     fun `falls back to cache when network fails`() = runTest {
+        // Stale cache so the repository actually reaches the network instead of
+        // returning the cache-hit fast path (which made this test vacuous).
+        val api = FakeApi(failure = IOException("offline"))
+        val dao = FakeQuestionDao(
+            preloaded = listOf(cached("q1", cachedAt = now - ExamRepository.CACHE_TTL_MS - 1))
+        )
+        val repo = ExamRepository(api, FakeAnswerDao(), dao, now = { now })
+
+        val result = repo.getQuestions("s1")
+
+        assertEquals(listOf("q1"), result.getOrThrow().map { it.id })
+        assertEquals("network must have been attempted", 1, api.calls)
+    }
+
+    @Test
+    fun `forceRefresh falls back to cache when network fails`() = runTest {
         val api = FakeApi(failure = IOException("offline"))
         val dao = FakeQuestionDao(preloaded = listOf(cached("q1")))
-        val repo = ExamRepository(api, FakeAnswerDao(), dao)
-        val result = repo.getQuestions("s1")
+        val repo = ExamRepository(api, FakeAnswerDao(), dao, now = { now })
+
+        val result = repo.getQuestions("s1", forceRefresh = true)
+
         assertEquals(listOf("q1"), result.getOrThrow().map { it.id })
+        assertEquals(1, api.calls)
     }
 
     @Test
@@ -39,14 +60,19 @@ class QuestionCacheTest {
     @Test
     fun `empty cache and network failure returns failure`() = runTest {
         val repo = ExamRepository(FakeApi(failure = IOException()), FakeAnswerDao(), FakeQuestionDao())
-        assertTrue(repo.getQuestions("s1").isFailure)
+        val result = repo.getQuestions("s1")
+        assertTrue(result.isFailure)
+        assertEquals(
+            ExamRepository.EMPTY_CACHE_MESSAGE,
+            result.exceptionOrNull()?.message
+        )
     }
 
     @Test
     fun `cache hit does not call network`() = runTest {
         val api = FakeApi(questions = listOf(dto("q9")))
         val dao = FakeQuestionDao(preloaded = listOf(cached("q1")))
-        val result = ExamRepository(api, FakeAnswerDao(), dao).getQuestions("s1")
+        val result = ExamRepository(api, FakeAnswerDao(), dao, now = { now }).getQuestions("s1")
         assertEquals(listOf("q1"), result.getOrThrow().map { it.id })
         assertEquals(0, api.calls)
     }
@@ -54,9 +80,17 @@ class QuestionCacheTest {
     @Test
     fun `sessions do not mix`() = runTest {
         val dao = FakeQuestionDao(
-            preloaded = listOf(cached("q1", "s1"), cached("q2", "s2"))
+            preloaded = listOf(
+                cached("q1", "s1", cachedAt = now - ExamRepository.CACHE_TTL_MS - 1),
+                cached("q2", "s2", cachedAt = now - ExamRepository.CACHE_TTL_MS - 1)
+            )
         )
-        val repo = ExamRepository(FakeApi(failure = IOException("offline")), FakeAnswerDao(), dao)
+        val repo = ExamRepository(
+            FakeApi(failure = IOException("offline")),
+            FakeAnswerDao(),
+            dao,
+            now = { now }
+        )
         assertEquals(listOf("q1"), repo.getQuestions("s1").getOrThrow().map { it.id })
         assertEquals(listOf("q2"), repo.getQuestions("s2").getOrThrow().map { it.id })
     }
@@ -84,7 +118,12 @@ class QuestionCacheTest {
         val stored = dao.saved.single()
         assertNotNull(stored.choicesJson)
 
-        val offline = ExamRepository(FakeApi(failure = IOException("offline")), FakeAnswerDao(), dao)
+        val offline = ExamRepository(
+            FakeApi(failure = IOException("offline")),
+            FakeAnswerDao(),
+            dao,
+            now = { System.currentTimeMillis() }
+        )
         val cachedQuestions = offline.getQuestions("s1").getOrThrow()
         assertEquals(listOf("A", "B"), cachedQuestions.single().choices)
     }
@@ -103,7 +142,6 @@ class QuestionCacheTest {
 
     @Test
     fun `stale cache is refreshed from network`() = runTest {
-        val now = 1_000_000_000L
         val dao = FakeQuestionDao(
             preloaded = listOf(
                 cached("q1", cachedAt = now - ExamRepository.CACHE_TTL_MS - 1)
@@ -114,6 +152,40 @@ class QuestionCacheTest {
 
         assertEquals(listOf("q9"), result.getOrThrow().map { it.id })
         assertEquals(1, api.calls)
+    }
+
+    /** I8: a cache write failure must not turn a good download into an error screen. */
+    @Test
+    fun `cache write failure still returns the network result`() = runTest {
+        val api = FakeApi(questions = listOf(dto("q9")))
+        val dao = FakeQuestionDao(failOnReplace = true)
+        val logged = mutableListOf<String>()
+
+        val result = ExamRepository(
+            api = api,
+            dao = FakeAnswerDao(),
+            questionDao = dao,
+            now = { now },
+            log = { message, _ -> logged.add(message) }
+        ).getQuestions("s1")
+
+        assertTrue("cache failure must not fail the load", result.isSuccess)
+        assertEquals(listOf("q9"), result.getOrThrow().map { it.id })
+        assertEquals(1, logged.size)
+    }
+
+    /** I8: with no cache, the paper still renders even though it could not be persisted. */
+    @Test
+    fun `cache write failure with empty cache still returns questions`() = runTest {
+        val dao = FakeQuestionDao(failOnReplace = true)
+        val result = ExamRepository(
+            FakeApi(questions = listOf(dto("q1"), dto("q2"))),
+            FakeAnswerDao(),
+            dao
+        ).getQuestions("s1")
+
+        assertEquals(listOf("q1", "q2"), result.getOrThrow().map { it.id })
+        assertEquals(emptyList<CachedQuestionEntity>(), dao.saved)
     }
 
     @Test
@@ -143,6 +215,21 @@ class QuestionCacheTest {
 
         assertNotNull(caught)
     }
+
+    @Test
+    fun `cache write cancellation is not swallowed`() = runTest {
+        val dao = FakeQuestionDao(failOnReplace = true, replaceError = CancellationException("stop"))
+        val repo = ExamRepository(FakeApi(questions = listOf(dto("q1"))), FakeAnswerDao(), dao)
+
+        var caught: Throwable? = null
+        try {
+            repo.getQuestions("s1")
+        } catch (e: CancellationException) {
+            caught = e
+        }
+
+        assertNotNull("cancellation during cache write must propagate", caught)
+    }
 }
 
 private fun cached(
@@ -168,7 +255,9 @@ private fun dto(id: String) = StudentQuestionDto(
 )
 
 private class FakeQuestionDao(
-    preloaded: List<CachedQuestionEntity> = emptyList()
+    preloaded: List<CachedQuestionEntity> = emptyList(),
+    private val failOnReplace: Boolean = false,
+    private val replaceError: Throwable = IOException("disk full")
 ) : QuestionDao {
     private val store = preloaded.toMutableList()
     var replaceCalls = 0
@@ -178,6 +267,7 @@ private class FakeQuestionDao(
 
     override suspend fun replaceForSession(sessionId: String, items: List<CachedQuestionEntity>) {
         replaceCalls++
+        if (failOnReplace) throw replaceError
         store.removeAll { it.sessionId == sessionId }
         store.addAll(items)
     }
@@ -198,14 +288,22 @@ private class FakeAnswerDao : AnswerDao {
     override fun observeAnswers(sessionId: String): Flow<List<CachedAnswerEntity>> =
         flowOf(emptyList())
 
-    override suspend fun getAnswer(questionId: String): CachedAnswerEntity? = null
+    override suspend fun getAnswer(sessionId: String, questionId: String): CachedAnswerEntity? =
+        null
 
     override suspend fun getUnsyncedAnswers(sessionId: String): List<CachedAnswerEntity> =
         emptyList()
 
+    override suspend fun countUnsyncedAnswers(sessionId: String): Int = 0
+
     override suspend fun saveAnswer(answer: CachedAnswerEntity) = Unit
 
-    override suspend fun markSynced(questionId: String) = Unit
+    override suspend fun markSynced(
+        sessionId: String,
+        questionId: String,
+        answer: String,
+        updatedAt: Long
+    ): Int = 0
 }
 
 private class FakeApi(
