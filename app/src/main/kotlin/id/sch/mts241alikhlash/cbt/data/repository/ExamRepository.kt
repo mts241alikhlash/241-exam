@@ -13,6 +13,8 @@ import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.json.Json
 import kotlin.coroutines.cancellation.CancellationException
 
+data class SyncReport(val synced: Int, val failed: Int)
+
 class ExamRepository(
     private val api: ExamApiService,
     private val dao: AnswerDao,
@@ -81,15 +83,22 @@ class ExamRepository(
         }
     }
 
-    suspend fun syncPending(sessionId: String) {
+    suspend fun syncPending(sessionId: String): SyncReport {
         val pending = dao.getUnsyncedAnswers(sessionId)
+        var synced = 0
+        var failed = 0
         for (item in pending) {
-            runCatching {
+            try {
                 api.saveAnswer(sessionId, SubmitAnswerRequest(item.questionId, item.answer))
-            }.onSuccess {
                 dao.markSynced(item.questionId)
+                synced++
+            } catch (cancellation: CancellationException) {
+                throw cancellation
+            } catch (_: Exception) {
+                failed++
             }
         }
+        return SyncReport(synced, failed)
     }
 
     private suspend fun loadCache(sessionId: String): List<CachedQuestionEntity> =
