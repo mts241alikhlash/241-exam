@@ -5,11 +5,18 @@ import android.view.WindowManager
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.lifecycle.lifecycleScope
 import id.sch.mts241alikhlash.cbt.ui.screens.ExamScreen
 import id.sch.mts241alikhlash.cbt.ui.screens.ExamViewModel
 import id.sch.mts241alikhlash.cbt.ui.screens.TokenScreen
 import id.sch.mts241alikhlash.cbt.ui.theme.AssessmentTheme
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
 
@@ -29,29 +36,59 @@ class MainActivity : ComponentActivity() {
         setContent {
             AssessmentTheme {
                 var currentSessionId by remember { mutableStateOf<String?>(null) }
+                var restoreComplete by remember { mutableStateOf(false) }
 
-                if (currentSessionId == null) {
-                    TokenScreen(
-                        onStartExam = { sessionId ->
-                            isExamActive = true
-                            startKioskMode()
-                            currentSessionId = sessionId
+                LaunchedEffect(Unit) {
+                    val restored = app.sessionRepository.current()
+                    if (restored != null) {
+                        isExamActive = true
+                        startKioskMode()
+                        currentSessionId = restored
+                    }
+                    restoreComplete = true
+                }
+
+                when {
+                    !restoreComplete -> {
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CircularProgressIndicator()
                         }
-                    )
-                } else {
-                    val viewModel = remember(currentSessionId) {
-                        ExamViewModel(app.repository, currentSessionId!!)
                     }
 
-                    ExamScreen(
-                        viewModel = viewModel,
-                        onFinish = {
-                            isExamActive = false
-                            stopKioskMode()
-                            currentSessionId = null
-                            Toast.makeText(this@MainActivity, "Ujian berhasil dikumpulkan", Toast.LENGTH_LONG).show()
+                    currentSessionId == null -> {
+                        TokenScreen(
+                            onStartExam = { sessionId ->
+                                isExamActive = true
+                                startKioskMode()
+                                lifecycleScope.launch {
+                                    app.sessionRepository.start(sessionId)
+                                }
+                                currentSessionId = sessionId
+                            }
+                        )
+                    }
+
+                    else -> {
+                        val viewModel = remember(currentSessionId) {
+                            ExamViewModel(app.repository, currentSessionId!!)
                         }
-                    )
+
+                        ExamScreen(
+                            viewModel = viewModel,
+                            onFinish = {
+                                isExamActive = false
+                                stopKioskMode()
+                                lifecycleScope.launch {
+                                    app.sessionRepository.finish()
+                                }
+                                currentSessionId = null
+                                Toast.makeText(this@MainActivity, "Ujian berhasil dikumpulkan", Toast.LENGTH_LONG).show()
+                            }
+                        )
+                    }
                 }
             }
         }

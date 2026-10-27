@@ -4,6 +4,8 @@ import android.app.Application
 import id.sch.mts241alikhlash.cbt.data.local.ExamDatabase
 import id.sch.mts241alikhlash.cbt.data.remote.ExamApiService
 import id.sch.mts241alikhlash.cbt.data.repository.ExamRepository
+import id.sch.mts241alikhlash.cbt.data.session.DataStoreSessionStore
+import id.sch.mts241alikhlash.cbt.data.session.SessionRepository
 import kotlinx.serialization.json.Json
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -16,8 +18,13 @@ class CBTApplication : Application() {
     lateinit var repository: ExamRepository
         private set
 
+    lateinit var sessionRepository: SessionRepository
+        private set
+
     override fun onCreate() {
         super.onCreate()
+
+        sessionRepository = SessionRepository(DataStoreSessionStore(this))
 
         val json = Json {
             ignoreUnknownKeys = true
