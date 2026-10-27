@@ -1,0 +1,20 @@
+package id.sch.mts241alikhlash.cbt.ui.screens
+
+/**
+ * Human-readable Indonesian label for a question type.
+ *
+ * Known types map to their Indonesian names; unknown non-blank types fall back to a
+ * readable uppercase form with underscores replaced by spaces; blank types get a
+ * generic "SOAL" label.
+ */
+fun questionTypeLabel(type: String): String {
+    val normalized = type.trim()
+    if (normalized.isEmpty()) return "SOAL"
+    return when (normalized.lowercase()) {
+        "multiple_choice" -> "PILIHAN GANDA"
+        "true_false" -> "BENAR / SALAH"
+        "essay" -> "URAIAN"
+        "short_answer" -> "JAWABAN SINGKAT"
+        else -> normalized.replace("_", " ").uppercase()
+    }
+}

@@ -539,7 +539,7 @@ fun ExamContent(
                                         color = StatusSuccessLight
                                     ) {
                                         Text(
-                                            text = currentQ.type.replace("_", " ").uppercase(),
+                                            text = questionTypeLabel(currentQ.type),
                                             fontFamily = DMSansFontFamily,
                                             fontWeight = FontWeight.SemiBold,
                                             fontSize = 11.sp,
