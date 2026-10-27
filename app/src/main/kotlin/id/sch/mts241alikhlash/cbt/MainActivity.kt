@@ -12,6 +12,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.lifecycleScope
+import id.sch.mts241alikhlash.cbt.data.session.endExamSession
 import id.sch.mts241alikhlash.cbt.ui.screens.ExamScreen
 import id.sch.mts241alikhlash.cbt.ui.screens.ExamViewModel
 import id.sch.mts241alikhlash.cbt.ui.screens.TokenScreen
@@ -83,10 +84,11 @@ class MainActivity : ComponentActivity() {
                                 stopKioskMode()
                                 val finishedSessionId = currentSessionId
                                 lifecycleScope.launch {
-                                    if (finishedSessionId != null) {
-                                        app.repository.clearQuestions(finishedSessionId)
-                                    }
-                                    app.sessionRepository.finish()
+                                    endExamSession(
+                                        sessionRepository = app.sessionRepository,
+                                        sessionId = finishedSessionId,
+                                        clearQuestions = app.repository::clearQuestions
+                                    )
                                 }
                                 currentSessionId = null
                                 Toast.makeText(this@MainActivity, "Ujian berhasil dikumpulkan", Toast.LENGTH_LONG).show()
