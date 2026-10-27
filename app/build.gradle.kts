@@ -15,6 +15,32 @@ fun String.requireHttps(): String {
 }
 fun String.asBuildConfigString(): String = "\"" + replace("\\", "\\\\").replace("\"", "\\\"") + "\""
 
+// Release signing credentials are read from -P Gradle properties or the matching
+// environment variables. No keystore, alias, or password is ever stored in the repo.
+// See docs/RELEASING.md.
+val releaseSigningProperties = listOf(
+    "RELEASE_STORE_FILE",
+    "KEYSTORE_PASSWORD",
+    "KEY_ALIAS",
+    "KEY_PASSWORD",
+)
+val releaseSigningValues: Map<String, String?> = releaseSigningProperties.associateWith { name ->
+    providers.gradleProperty(name).orNull?.takeIf { it.isNotBlank() }
+        ?: providers.environmentVariable(name).orNull?.takeIf { it.isNotBlank() }
+}
+val hasCompleteReleaseSigning = releaseSigningValues.values.all { it != null }
+val hasReleaseStoreFile = releaseSigningValues["RELEASE_STORE_FILE"] != null
+
+// Packaging tasks that would emit a release APK/AAB. Unit-test tasks such as
+// `testReleaseUnitTest` are intentionally excluded: they must run without credentials.
+val releasePackagingRequested = gradle.startParameter.taskNames.any { requested ->
+    val task = requested.substringAfterLast(':')
+    task == "build" || task == "assemble" || task == "bundle" ||
+        listOf("assemble", "bundle", "package", "install", "sign").any { prefix ->
+            task.startsWith(prefix) && task.contains("Release")
+        }
+}
+
 android {
     namespace = "id.sch.mts241alikhlash.cbt"
     compileSdk = 35
@@ -33,6 +59,17 @@ android {
             "http://10.0.2.2:4100/".asBuildConfigString(),
         )
 
+    }
+
+    signingConfigs {
+        if (hasReleaseStoreFile) {
+            create("release") {
+                storeFile = file(releaseSigningValues.getValue("RELEASE_STORE_FILE")!!)
+                storePassword = releaseSigningValues["KEYSTORE_PASSWORD"]
+                keyAlias = releaseSigningValues["KEY_ALIAS"]
+                keyPassword = releaseSigningValues["KEY_PASSWORD"]
+            }
+        }
     }
 
     buildTypes {
@@ -56,6 +93,17 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            if (hasCompleteReleaseSigning) {
+                signingConfig = signingConfigs.findByName("release")
+            } else if (releasePackagingRequested) {
+                val missing = releaseSigningProperties.filter { releaseSigningValues[it] == null }
+                throw GradleException(
+                    "Release build needs -PRELEASE_STORE_FILE, -PKEYSTORE_PASSWORD, " +
+                        "-PKEY_ALIAS, -PKEY_PASSWORD " +
+                        "(or the same names as environment variables). " +
+                        "Missing: ${missing.joinToString(", ")}. See docs/RELEASING.md."
+                )
+            }
         }
     }
     compileOptions {
