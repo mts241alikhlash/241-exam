@@ -7,6 +7,14 @@ plugins {
     alias(libs.plugins.paparazzi)
 }
 
+
+fun String.asBaseUrl(): String = trim().let { if (it.endsWith("/")) it else "$it/" }
+fun String.requireHttps(): String {
+    require(startsWith("https://")) { "API_BASE_URL must use https:// for release builds, got '$this'" }
+    return this
+}
+fun String.asBuildConfigString(): String = "\"" + replace("\\", "\\\\").replace("\"", "\\\"") + "\""
+
 android {
     namespace = "id.sch.mts241alikhlash.cbt"
     compileSdk = 35
@@ -19,17 +27,30 @@ android {
         versionName = "1.0.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        buildConfigField(
+            "String",
+            "BASE_URL",
+            "http://10.0.2.2:4100/".asBuildConfigString(),
+        )
 
     }
 
     buildTypes {
         debug {
-            val debugUrl = providers.gradleProperty("API_BASE_URL_DEBUG").orElse("http://10.0.2.2:4100/").get()
-            buildConfigField("String", "BASE_URL", "\"$debugUrl\"")
+            val debugUrl = providers.gradleProperty("API_BASE_URL_DEBUG")
+                .orElse(providers.gradleProperty("API_BASE_URL"))
+                .orElse("http://10.0.2.2:4100/")
+                .get()
+                .asBaseUrl()
+            buildConfigField("String", "BASE_URL", debugUrl.asBuildConfigString())
         }
         release {
-            val releaseUrl = providers.gradleProperty("API_BASE_URL").orElse("https://exam-api.invalid/").get()
-            buildConfigField("String", "BASE_URL", "\"$releaseUrl\"")
+            val releaseUrl = providers.gradleProperty("API_BASE_URL")
+                .orElse("https://exam-api.invalid/")
+                .get()
+                .asBaseUrl()
+                .requireHttps()
+            buildConfigField("String", "BASE_URL", releaseUrl.asBuildConfigString())
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
