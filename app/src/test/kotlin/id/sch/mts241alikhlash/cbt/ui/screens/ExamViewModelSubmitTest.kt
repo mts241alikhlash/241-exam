@@ -218,6 +218,33 @@ class ExamViewModelSubmitTest {
         assertFalse(vm.uiState.value.isResumed)
     }
 
+    /**
+     * R2: the deadline is written at start, read back from DataStore, then handed to the
+     * ViewModel — so the ViewModel always observes a few ms of latency. A brand-new exam
+     * must still read 90:00 and must not show the "Ujian dilanjutkan" banner.
+     */
+    @Test
+    fun `startup latency does not turn a fresh exam into a resumed one`() = runTest {
+        val deadline = 90L * 60L * 1000L
+        testScheduler.advanceTimeBy(50L) // process start-up cost
+        val vm = viewModel(repoWithPending(0), deadline = deadline)
+        runCurrent()
+
+        assertEquals("must open at 90:00, not 89:59", 5400L, vm.uiState.value.remainingSeconds)
+        assertFalse("fresh exam must not show the resumed banner", vm.uiState.value.isResumed)
+    }
+
+    @Test
+    fun `a genuinely resumed exam still shows the banner`() = runTest {
+        val deadline = 90L * 60L * 1000L
+        testScheduler.advanceTimeBy(10L * 60L * 1000L) // app away for ten minutes
+        val vm = viewModel(repoWithPending(0), deadline = deadline)
+        runCurrent()
+
+        assertEquals(4800L, vm.uiState.value.remainingSeconds)
+        assertTrue(vm.uiState.value.isResumed)
+    }
+
     @Test
     fun `expired deadline clamps to zero`() = runTest {
         val vm = viewModel(repoWithPending(0), deadline = -60_000L)
