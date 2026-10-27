@@ -10,7 +10,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 @Database(
     entities = [CachedAnswerEntity::class, CachedQuestionEntity::class],
     version = 2,
-    exportSchema = false
+    exportSchema = true
 )
 abstract class ExamDatabase : RoomDatabase() {
     abstract fun answerDao(): AnswerDao
@@ -21,7 +21,7 @@ abstract class ExamDatabase : RoomDatabase() {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL(
                     """
-                    CREATE TABLE IF NOT EXISTS `cached_questions` (
+                    CREATE TABLE `cached_questions` (
                         `sessionId` TEXT NOT NULL,
                         `id` TEXT NOT NULL,
                         `number` INTEGER NOT NULL,

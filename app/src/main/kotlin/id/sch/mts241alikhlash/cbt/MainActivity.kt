@@ -81,7 +81,11 @@ class MainActivity : ComponentActivity() {
                             onFinish = {
                                 isExamActive = false
                                 stopKioskMode()
+                                val finishedSessionId = currentSessionId
                                 lifecycleScope.launch {
+                                    if (finishedSessionId != null) {
+                                        app.repository.clearQuestions(finishedSessionId)
+                                    }
                                     app.sessionRepository.finish()
                                 }
                                 currentSessionId = null
