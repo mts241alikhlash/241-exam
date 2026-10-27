@@ -28,17 +28,30 @@ val releaseSigningValues: Map<String, String?> = releaseSigningProperties.associ
     providers.gradleProperty(name).orNull?.takeIf { it.isNotBlank() }
         ?: providers.environmentVariable(name).orNull?.takeIf { it.isNotBlank() }
 }
-val hasCompleteReleaseSigning = releaseSigningValues.values.all { it != null }
-val hasReleaseStoreFile = releaseSigningValues["RELEASE_STORE_FILE"] != null
+val releaseStoreFilePath = releaseSigningValues["RELEASE_STORE_FILE"]
+val releaseStoreFile = releaseStoreFilePath?.let { file(it) }
+val hasReleaseStoreFile = releaseStoreFile?.exists() == true
+
+// A typo'd RELEASE_STORE_FILE must fail here, not later with AGP's generic error.
+val missingReleaseSigningInputs: List<String> = releaseSigningProperties.mapNotNull { name ->
+    when {
+        releaseSigningValues[name] == null -> name
+        name == "RELEASE_STORE_FILE" && !hasReleaseStoreFile ->
+            "$name (file not found: $releaseStoreFilePath)"
+        else -> null
+    }
+}
+val hasCompleteReleaseSigning = missingReleaseSigningInputs.isEmpty()
 
 // Packaging tasks that would emit a release APK/AAB. Unit-test tasks such as
 // `testReleaseUnitTest` are intentionally excluded: they must run without credentials.
 val releasePackagingRequested = gradle.startParameter.taskNames.any { requested ->
     val task = requested.substringAfterLast(':')
+    val isPackagingPrefix = listOf(
+        "assemble", "bundle", "package", "install", "sign", "publish",
+    ).any { task.startsWith(it) }
     task == "build" || task == "assemble" || task == "bundle" ||
-        listOf("assemble", "bundle", "package", "install", "sign").any { prefix ->
-            task.startsWith(prefix) && task.contains("Release")
-        }
+        (isPackagingPrefix && task.contains("Release") && !task.contains("Test"))
 }
 
 android {
@@ -64,7 +77,7 @@ android {
     signingConfigs {
         if (hasReleaseStoreFile) {
             create("release") {
-                storeFile = file(releaseSigningValues.getValue("RELEASE_STORE_FILE")!!)
+                storeFile = releaseStoreFile
                 storePassword = releaseSigningValues["KEYSTORE_PASSWORD"]
                 keyAlias = releaseSigningValues["KEY_ALIAS"]
                 keyPassword = releaseSigningValues["KEY_PASSWORD"]
@@ -96,12 +109,12 @@ android {
             if (hasCompleteReleaseSigning) {
                 signingConfig = signingConfigs.findByName("release")
             } else if (releasePackagingRequested) {
-                val missing = releaseSigningProperties.filter { releaseSigningValues[it] == null }
                 throw GradleException(
                     "Release build needs -PRELEASE_STORE_FILE, -PKEYSTORE_PASSWORD, " +
                         "-PKEY_ALIAS, -PKEY_PASSWORD " +
                         "(or the same names as environment variables). " +
-                        "Missing: ${missing.joinToString(", ")}. See docs/RELEASING.md."
+                        "Missing: ${missingReleaseSigningInputs.joinToString(", ")}. " +
+                        "See docs/RELEASING.md."
                 )
             }
         }

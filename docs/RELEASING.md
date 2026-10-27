@@ -17,9 +17,13 @@ naming every required input instead of silently producing an unsigned APK.
 All four are required. The build checks them at configuration time and stops with:
 
 ```
-Release build needs -PRELEASE_STORE_FILE, -PKEYSTORE_PASSWORD, -PKEY_ALIAS,
--PKEY_PASSWORD (or the same names as environment variables).
+Release build needs -PRELEASE_STORE_FILE, -PKEYSTORE_PASSWORD, -PKEY_ALIAS, -PKEY_PASSWORD (or the same names as environment variables). Missing: RELEASE_STORE_FILE, KEYSTORE_PASSWORD, KEY_ALIAS, KEY_PASSWORD. See docs/RELEASING.md.
 ```
+
+The `Missing:` list reflects what is actually absent, so a partial set only names the
+unset values. If `RELEASE_STORE_FILE` points at a path that does not exist, the list
+shows `RELEASE_STORE_FILE (file not found: /path/to/keystore.jks)` instead of failing
+later with a generic packaging error.
 
 ## Creating the keystore (once, kept offline)
 
@@ -81,19 +85,21 @@ environment variables with the exact names above. Example for GitHub Actions:
 ```yaml
 - name: Build signed release
   env:
-    RELEASE_STORE_FILE: ${{ github.workspace }}/release.jks
+    RELEASE_STORE_FILE: ${{ runner.temp }}/release.jks
     KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
     KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
     KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+    RELEASE_KEYSTORE_BASE64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
   run: |
-    printf '%s' "${{ secrets.RELEASE_KEYSTORE_BASE64 }}" | base64 -d > "$RELEASE_STORE_FILE"
+    trap 'rm -f "$RELEASE_STORE_FILE"' EXIT
+    printf '%s' "$RELEASE_KEYSTORE_BASE64" | base64 -d > "$RELEASE_STORE_FILE"
     ./gradlew :app:assembleRelease
-    rm -f "$RELEASE_STORE_FILE"
 ```
 
-The keystore itself is supplied as a base64-encoded secret and written to a
-temporary path inside the runner workspace, then deleted. Never echo the passwords;
-mask them in CI logs.
+The keystore is decoded into `$RUNNER_TEMP` (outside the checkout) and removed by
+the `EXIT` trap even if the build fails. The base64 blob is passed through `env:`
+rather than interpolated into the shell script, so it never appears in the rendered
+command. Never echo the passwords; mask them in CI logs.
 
 ## Pre-release checks
 
