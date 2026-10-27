@@ -19,10 +19,17 @@ android {
         versionName = "1.0.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
     }
 
     buildTypes {
+        debug {
+            val debugUrl = providers.gradleProperty("API_BASE_URL_DEBUG").orElse("http://10.0.2.2:4100/").get()
+            buildConfigField("String", "BASE_URL", "\"$debugUrl\"")
+        }
         release {
+            val releaseUrl = providers.gradleProperty("API_BASE_URL").orElse("https://exam-api.invalid/").get()
+            buildConfigField("String", "BASE_URL", "\"$releaseUrl\"")
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
@@ -39,6 +46,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 
