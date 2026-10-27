@@ -59,6 +59,7 @@ class ScreenshotTest {
                     onToggleDoubtful = {},
                     onGoToIndex = {},
                     onSubmit = {},
+                    onRetry = {},
                     onFinish = {},
                 )
             }
