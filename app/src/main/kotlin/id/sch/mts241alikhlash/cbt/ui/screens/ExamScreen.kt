@@ -103,6 +103,12 @@ fun ExamContent(
         }
     }
 
+    LaunchedEffect(state.submitError) {
+        if (state.submitError != null) {
+            showConfirmDialog = true
+        }
+    }
+
     if (showConfirmDialog) {
         AlertDialog(
             onDismissRequest = { showConfirmDialog = false },
@@ -142,6 +148,15 @@ fun ExamContent(
                         fontSize = 12.sp,
                         color = TextMuted
                     )
+                    state.submitError?.let { error ->
+                        Text(
+                            text = error,
+                            fontFamily = DMSansFontFamily,
+                            fontWeight = FontWeight.Medium,
+                            fontSize = 12.sp,
+                            color = StatusError
+                        )
+                    }
                 }
             },
             confirmButton = {

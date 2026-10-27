@@ -78,8 +78,10 @@ android {
     }
 
     sourceSets {
-        // Robolectric unit tests read the exported Room schemas from the merged debug assets.
+        // Robolectric unit tests read the exported Room schemas from the merged assets.
+        // Both variants need them: `test` runs the migration test for debug and release.
         getByName("debug").assets.srcDir("$projectDir/schemas")
+        getByName("release").assets.srcDir("$projectDir/schemas")
         getByName("androidTest").assets.srcDir("$projectDir/schemas")
     }
 }

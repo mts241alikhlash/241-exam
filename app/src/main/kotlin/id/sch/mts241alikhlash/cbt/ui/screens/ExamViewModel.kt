@@ -18,7 +18,8 @@ data class ExamUiState(
     val answers: Map<String, String> = emptyMap(),
     val doubtfuls: Set<String> = emptySet(),
     val remainingSeconds: Long = 5400,
-    val isSubmitted: Boolean = false
+    val isSubmitted: Boolean = false,
+    val submitError: String? = null
 )
 
 class ExamViewModel(
@@ -101,8 +102,16 @@ class ExamViewModel(
 
     fun submitExam() {
         viewModelScope.launch {
-            repository.syncPending(sessionId)
-            _uiState.value = _uiState.value.copy(isSubmitted = true)
+            _uiState.value = _uiState.value.copy(submitError = null)
+            val report = repository.syncPending(sessionId)
+            if (report.failed == 0) {
+                _uiState.value = _uiState.value.copy(isSubmitted = true)
+            } else {
+                _uiState.value = _uiState.value.copy(
+                    isSubmitted = false,
+                    submitError = "${report.failed} jawaban belum terkirim. Coba lagi."
+                )
+            }
         }
     }
 }
