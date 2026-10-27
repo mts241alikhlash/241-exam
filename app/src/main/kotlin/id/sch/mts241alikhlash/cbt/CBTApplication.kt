@@ -54,6 +54,6 @@ class CBTApplication : Application() {
         val api = retrofit.create(ExamApiService::class.java)
         val database = ExamDatabase.getInstance(this)
 
-        repository = ExamRepository(api, database.answerDao())
+        repository = ExamRepository(api, database.answerDao(), database.questionDao())
     }
 }
