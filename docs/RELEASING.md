@@ -105,8 +105,15 @@ Run all of these before tagging a release:
 ./gradlew :app:assembleRelease    # signed APK (requires credentials)
 ```
 
-Then verify the APK signature with `apksigner verify --print-certs` as shown above
-and confirm the certificate fingerprint matches the expected release key.
+You can also confirm Gradle picked up the signing config before packaging:
+
+```bash
+./gradlew :app:signingReport
+```
+
+The `release` variant should list your keystore and alias (passwords are never
+printed). Then verify the APK signature with `apksigner verify --print-certs` as
+shown above and confirm the certificate fingerprint matches the expected release key.
 
 ## Never commit the keystore
 
