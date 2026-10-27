@@ -7,6 +7,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -50,6 +51,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import id.sch.mts241alikhlash.cbt.R
@@ -298,21 +300,27 @@ fun ExamContent(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 10.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
+                            .padding(horizontal = 8.dp, vertical = 10.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         OutlinedButton(
                             onClick = { onGoToIndex(state.currentIndex - 1) },
                             enabled = state.currentIndex > 0 && !state.isSubmitting,
                             shape = RoundedCornerShape(8.dp),
-                            modifier = Modifier.height(38.dp)
+                            contentPadding = PaddingValues(horizontal = 8.dp),
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(38.dp)
                         ) {
                             Text(
                                 text = "Sebelumnya",
                                 fontFamily = DMSansFontFamily,
                                 fontWeight = FontWeight.Medium,
-                                fontSize = 13.sp
+                                fontSize = 13.sp,
+                                maxLines = 1,
+                                softWrap = false,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
 
@@ -330,7 +338,10 @@ fun ExamContent(
                             colors = ButtonDefaults.outlinedButtonColors(
                                 containerColor = if (isDoubt) DoubtfulOrangeLight else Color.Transparent
                             ),
-                            modifier = Modifier.height(38.dp)
+                            contentPadding = PaddingValues(horizontal = 8.dp),
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(38.dp)
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Warning,
@@ -344,7 +355,10 @@ fun ExamContent(
                                 fontFamily = DMSansFontFamily,
                                 fontWeight = FontWeight.Medium,
                                 fontSize = 12.sp,
-                                color = if (isDoubt) DoubtfulOrange else TextSecondary
+                                color = if (isDoubt) DoubtfulOrange else TextSecondary,
+                                maxLines = 1,
+                                softWrap = false,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
 
@@ -354,13 +368,18 @@ fun ExamContent(
                                 enabled = !state.isSubmitting,
                                 shape = RoundedCornerShape(8.dp),
                                 colors = ButtonDefaults.buttonColors(containerColor = BrandNavy),
-                                modifier = Modifier.height(38.dp)
+                                contentPadding = PaddingValues(horizontal = 8.dp),
+                                modifier = Modifier
+                                    .weight(1.2f)
+                                    .height(38.dp)
                             ) {
                                 Text(
                                     text = "Selanjutnya",
                                     fontFamily = DMSansFontFamily,
                                     fontWeight = FontWeight.SemiBold,
-                                    fontSize = 13.sp
+                                    fontSize = 13.sp,
+                                    maxLines = 1,
+                                    softWrap = false
                                 )
                             }
                         } else {
@@ -369,13 +388,18 @@ fun ExamContent(
                                 enabled = state.canSubmit,
                                 shape = RoundedCornerShape(8.dp),
                                 colors = ButtonDefaults.buttonColors(containerColor = StatusSuccess),
-                                modifier = Modifier.height(38.dp)
+                                contentPadding = PaddingValues(horizontal = 8.dp),
+                                modifier = Modifier
+                                    .weight(1.2f)
+                                    .height(38.dp)
                             ) {
                                 Text(
                                     text = if (state.isSubmitting) "Mengirim…" else "Kumpulkan",
                                     fontFamily = DMSansFontFamily,
                                     fontWeight = FontWeight.SemiBold,
-                                    fontSize = 13.sp
+                                    fontSize = 13.sp,
+                                    maxLines = 1,
+                                    softWrap = false
                                 )
                             }
                         }
