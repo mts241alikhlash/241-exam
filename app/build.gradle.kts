@@ -79,9 +79,10 @@ android {
 
     sourceSets {
         // Robolectric unit tests read the exported Room schemas from the merged assets.
-        // Both variants need them: `test` runs the migration test for debug and release.
+        // Only debug and androidTest carry them: the release APK must not ship test
+        // fixtures, so `ExamDatabaseMigrationTest` skips itself when they are absent
+        // (i.e. under `testReleaseUnitTest`).
         getByName("debug").assets.srcDir("$projectDir/schemas")
-        getByName("release").assets.srcDir("$projectDir/schemas")
         getByName("androidTest").assets.srcDir("$projectDir/schemas")
     }
 }
