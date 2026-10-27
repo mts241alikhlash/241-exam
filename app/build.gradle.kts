@@ -69,6 +69,26 @@ android {
         compose = true
         buildConfig = true
     }
+
+    testOptions {
+        unitTests.isIncludeAndroidResources = true
+        // Paparazzi and Robolectric cannot share a JVM: Paparazzi's layoutlib bridge
+        // fails to initialise once Robolectric has run in the same process.
+        unitTests.all { it.forkEvery = 1 }
+    }
+
+    sourceSets {
+        // Robolectric unit tests read the exported Room schemas from the merged assets.
+        // Only debug and androidTest carry them: the release APK must not ship test
+        // fixtures, so `ExamDatabaseMigrationTest` skips itself when they are absent
+        // (i.e. under `testReleaseUnitTest`).
+        getByName("debug").assets.srcDir("$projectDir/schemas")
+        getByName("androidTest").assets.srcDir("$projectDir/schemas")
+    }
+}
+
+ksp {
+    arg("room.schemaLocation", "$projectDir/schemas")
 }
 
 dependencies {
@@ -94,8 +114,13 @@ dependencies {
 
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.kotlinx.coroutines.android)
+    implementation(libs.androidx.datastore.preferences)
 
     debugImplementation(libs.androidx.ui.tooling)
 
     testImplementation("junit:junit:4.13.2")
+    testImplementation(libs.kotlinx.coroutines.test)
+    testImplementation(libs.androidx.room.testing)
+    testImplementation(libs.androidx.test.core)
+    testImplementation(libs.robolectric)
 }

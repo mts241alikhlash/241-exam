@@ -82,6 +82,7 @@ fun ExamScreen(
         onToggleDoubtful = viewModel::toggleDoubtful,
         onGoToIndex = viewModel::goToIndex,
         onSubmit = viewModel::submitExam,
+        onRetry = viewModel::retry,
         onFinish = onFinish
     )
 }
@@ -93,6 +94,7 @@ fun ExamContent(
     onToggleDoubtful: (String) -> Unit,
     onGoToIndex: (Int) -> Unit,
     onSubmit: () -> Unit,
+    onRetry: () -> Unit,
     onFinish: () -> Unit
 ) {
     var showConfirmDialog by remember { mutableStateOf(false) }
@@ -103,9 +105,15 @@ fun ExamContent(
         }
     }
 
+    LaunchedEffect(state.submitError) {
+        if (state.submitError != null) {
+            showConfirmDialog = true
+        }
+    }
+
     if (showConfirmDialog) {
         AlertDialog(
-            onDismissRequest = { showConfirmDialog = false },
+            onDismissRequest = { if (!state.isSubmitting) showConfirmDialog = false },
             shape = RoundedCornerShape(10.dp),
             containerColor = BrandSurface,
             title = {
@@ -142,6 +150,24 @@ fun ExamContent(
                         fontSize = 12.sp,
                         color = TextMuted
                     )
+                    if (state.isSubmitting) {
+                        Text(
+                            text = "Mengirim jawaban…",
+                            fontFamily = DMSansFontFamily,
+                            fontWeight = FontWeight.Medium,
+                            fontSize = 12.sp,
+                            color = TextSecondary
+                        )
+                    }
+                    state.submitError?.let { error ->
+                        Text(
+                            text = error,
+                            fontFamily = DMSansFontFamily,
+                            fontWeight = FontWeight.Medium,
+                            fontSize = 12.sp,
+                            color = StatusError
+                        )
+                    }
                 }
             },
             confirmButton = {
@@ -150,6 +176,7 @@ fun ExamContent(
                         showConfirmDialog = false
                         onSubmit()
                     },
+                    enabled = !state.isSubmitting,
                     shape = RoundedCornerShape(8.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = BrandNavy)
                 ) {
@@ -163,7 +190,8 @@ fun ExamContent(
             },
             dismissButton = {
                 TextButton(
-                    onClick = { showConfirmDialog = false }
+                    onClick = { showConfirmDialog = false },
+                    enabled = !state.isSubmitting
                 ) {
                     Text(
                         text = "Periksa Kembali",
@@ -242,13 +270,15 @@ fun ExamContent(
 
                         Button(
                             onClick = { showConfirmDialog = true },
+                            // Cannot finish a paper that never loaded, or one already sending.
+                            enabled = state.canSubmit,
                             colors = ButtonDefaults.buttonColors(containerColor = StatusError),
                             shape = RoundedCornerShape(6.dp),
                             modifier = Modifier.height(32.dp),
                             contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = 0.dp)
                         ) {
                             Text(
-                                text = "Selesai",
+                                text = if (state.isSubmitting) "Mengirim…" else "Selesai",
                                 fontFamily = DMSansFontFamily,
                                 fontWeight = FontWeight.SemiBold,
                                 fontSize = 12.sp
@@ -274,7 +304,7 @@ fun ExamContent(
                     ) {
                         OutlinedButton(
                             onClick = { onGoToIndex(state.currentIndex - 1) },
-                            enabled = state.currentIndex > 0,
+                            enabled = state.currentIndex > 0 && !state.isSubmitting,
                             shape = RoundedCornerShape(8.dp),
                             modifier = Modifier.height(38.dp)
                         ) {
@@ -291,6 +321,7 @@ fun ExamContent(
 
                         OutlinedButton(
                             onClick = { onToggleDoubtful(currentQ.id) },
+                            enabled = state.canAnswer,
                             shape = RoundedCornerShape(8.dp),
                             border = androidx.compose.foundation.BorderStroke(
                                 1.dp,
@@ -320,6 +351,7 @@ fun ExamContent(
                         if (state.currentIndex < state.questions.size - 1) {
                             Button(
                                 onClick = { onGoToIndex(state.currentIndex + 1) },
+                                enabled = !state.isSubmitting,
                                 shape = RoundedCornerShape(8.dp),
                                 colors = ButtonDefaults.buttonColors(containerColor = BrandNavy),
                                 modifier = Modifier.height(38.dp)
@@ -334,12 +366,13 @@ fun ExamContent(
                         } else {
                             Button(
                                 onClick = { showConfirmDialog = true },
+                                enabled = state.canSubmit,
                                 shape = RoundedCornerShape(8.dp),
                                 colors = ButtonDefaults.buttonColors(containerColor = StatusSuccess),
                                 modifier = Modifier.height(38.dp)
                             ) {
                                 Text(
-                                    text = "Kumpulkan",
+                                    text = if (state.isSubmitting) "Mengirim…" else "Kumpulkan",
                                     fontFamily = DMSansFontFamily,
                                     fontWeight = FontWeight.SemiBold,
                                     fontSize = 13.sp
@@ -351,205 +384,314 @@ fun ExamContent(
             }
         }
     ) { padding ->
-        if (state.isLoading) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(BrandBackground)
-                    .padding(padding),
-                contentAlignment = Alignment.Center
-            ) {
-                CircularProgressIndicator(color = BrandNavy)
-            }
-        } else if (state.questions.isNotEmpty()) {
-            val currentQ = state.questions[state.currentIndex]
-            val selectedChoice = state.answers[currentQ.id]
-
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(BrandBackground)
-                    .padding(padding)
-                    .padding(horizontal = 16.dp, vertical = 12.dp)
-            ) {
-                LazyRow(
+        when {
+            state.isLoading -> {
+                Box(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 12.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        .fillMaxSize()
+                        .background(BrandBackground)
+                        .padding(padding),
+                    contentAlignment = Alignment.Center
                 ) {
-                    itemsIndexed(state.questions) { index, q ->
-                        val isCurrent = index == state.currentIndex
-                        val isAnswered = state.answers.containsKey(q.id)
-                        val isDoubtItem = state.doubtfuls.contains(q.id)
+                    CircularProgressIndicator(color = BrandNavy)
+                }
+            }
 
-                        val bgColor = when {
-                            isCurrent -> BrandNavy
-                            isDoubtItem -> DoubtfulOrange
-                            isAnswered -> StatusSuccess
-                            else -> BrandSurface
-                        }
+            state.errorMessage != null -> {
+                ExamErrorContent(
+                    message = state.errorMessage,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(BrandBackground)
+                        .padding(padding),
+                    onRetry = onRetry
+                )
+            }
 
-                        val textColor = when {
-                            isCurrent || isDoubtItem || isAnswered -> Color.White
-                            else -> TextSecondary
-                        }
+            state.questions.isEmpty() -> {
+                ExamErrorContent(
+                    message = ExamViewModel.EMPTY_PAPER_MESSAGE,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(BrandBackground)
+                        .padding(padding),
+                    onRetry = onRetry
+                )
+            }
 
-                        Box(
+            else -> {
+                val currentQ = state.questions[state.currentIndex]
+                val selectedChoice = state.answers[currentQ.id]
+
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(BrandBackground)
+                        .padding(padding)
+                        .padding(horizontal = 16.dp, vertical = 12.dp)
+                ) {
+                    if (state.isResumed) {
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = DoubtfulOrangeLight,
+                            border = androidx.compose.foundation.BorderStroke(1.dp, DoubtfulOrange),
                             modifier = Modifier
-                                .size(34.dp)
-                                .clip(RoundedCornerShape(6.dp))
-                                .background(bgColor)
-                                .border(
-                                    1.dp,
-                                    if (isCurrent) BrandNavy else BorderSubtle,
-                                    RoundedCornerShape(6.dp)
-                                )
-                                .clickable { onGoToIndex(index) },
-                            contentAlignment = Alignment.Center
+                                .fillMaxWidth()
+                                .padding(bottom = 10.dp)
                         ) {
                             Text(
-                                text = "${index + 1}",
+                                text = "Ujian dilanjutkan. Sisa waktu mengikuti jam sebenarnya.",
                                 fontFamily = DMSansFontFamily,
-                                fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Medium,
+                                fontWeight = FontWeight.Medium,
                                 fontSize = 12.sp,
-                                color = textColor
+                                color = DoubtfulOrange,
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
                             )
                         }
                     }
-                }
 
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f)
-                        .border(1.dp, BorderSubtle, RoundedCornerShape(10.dp)),
-                    colors = CardDefaults.cardColors(containerColor = BrandSurface),
-                    shape = RoundedCornerShape(10.dp),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
-                ) {
-                    LazyColumn(
+                    LazyRow(
                         modifier = Modifier
-                            .fillMaxSize()
-                            .padding(18.dp)
+                            .fillMaxWidth()
+                            .padding(bottom = 12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        item {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(bottom = 14.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Surface(
-                                    shape = RoundedCornerShape(6.dp),
-                                    color = BrandMuted,
-                                    border = androidx.compose.foundation.BorderStroke(1.dp, BorderSubtle)
-                                ) {
-                                    Text(
-                                        text = "Soal Nomor ${state.currentIndex + 1} dari ${state.questions.size}",
-                                        fontFamily = DMSansFontFamily,
-                                        fontWeight = FontWeight.SemiBold,
-                                        fontSize = 12.sp,
-                                        color = TextPrimary,
-                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                                    )
-                                }
+                        itemsIndexed(state.questions) { index, q ->
+                            val isCurrent = index == state.currentIndex
+                            val isAnswered = state.answers.containsKey(q.id)
+                            val isDoubtItem = state.doubtfuls.contains(q.id)
 
-                                Surface(
-                                    shape = RoundedCornerShape(6.dp),
-                                    color = StatusSuccessLight
-                                ) {
-                                    Text(
-                                        text = currentQ.type.replace("_", " ").uppercase(),
-                                        fontFamily = DMSansFontFamily,
-                                        fontWeight = FontWeight.SemiBold,
-                                        fontSize = 11.sp,
-                                        color = StatusSuccess,
-                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                            val bgColor = when {
+                                isCurrent -> BrandNavy
+                                isDoubtItem -> DoubtfulOrange
+                                isAnswered -> StatusSuccess
+                                else -> BrandSurface
+                            }
+
+                            val textColor = when {
+                                isCurrent || isDoubtItem || isAnswered -> Color.White
+                                else -> TextSecondary
+                            }
+
+                            Box(
+                                modifier = Modifier
+                                    .size(34.dp)
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .background(bgColor)
+                                    .border(
+                                        1.dp,
+                                        if (isCurrent) BrandNavy else BorderSubtle,
+                                        RoundedCornerShape(6.dp)
                                     )
-                                }
+                                    .clickable { onGoToIndex(index) },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = "${index + 1}",
+                                    fontFamily = DMSansFontFamily,
+                                    fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Medium,
+                                    fontSize = 12.sp,
+                                    color = textColor
+                                )
                             }
                         }
+                    }
 
-                        item {
-                            Text(
-                                text = currentQ.bodyHtml.replace(Regex("<[^>]*>"), ""),
-                                fontFamily = DMSansFontFamily,
-                                fontSize = 15.sp,
-                                lineHeight = 22.sp,
-                                color = TextPrimary,
-                                modifier = Modifier.padding(bottom = 20.dp)
-                            )
-                        }
-
-                        if (currentQ.choices != null) {
-                            itemsIndexed(currentQ.choices) { index, choice ->
-                                val letter = ('A' + index).toString()
-                                val isSelected = selectedChoice == choice
-
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f)
+                            .border(1.dp, BorderSubtle, RoundedCornerShape(10.dp)),
+                        colors = CardDefaults.cardColors(containerColor = BrandSurface),
+                        shape = RoundedCornerShape(10.dp),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+                    ) {
+                        LazyColumn(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(18.dp)
+                        ) {
+                            item {
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .padding(vertical = 5.dp)
-                                        .clip(RoundedCornerShape(8.dp))
-                                        .border(
-                                            width = if (isSelected) 1.5.dp else 1.dp,
-                                            color = if (isSelected) BorderFocus else BorderSubtle,
-                                            shape = RoundedCornerShape(8.dp)
-                                        )
-                                        .background(
-                                            color = if (isSelected) BrandNavySubtle else BrandSurface
-                                        )
-                                        .clickable { onSelectAnswer(currentQ.id, choice) }
-                                        .padding(horizontal = 14.dp, vertical = 12.dp),
+                                        .padding(bottom = 14.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(28.dp)
-                                            .clip(CircleShape)
-                                            .background(if (isSelected) BrandNavy else BrandMuted)
-                                            .border(
-                                                1.dp,
-                                                if (isSelected) BrandNavy else BorderSubtle,
-                                                CircleShape
-                                            ),
-                                        contentAlignment = Alignment.Center
+                                    Surface(
+                                        shape = RoundedCornerShape(6.dp),
+                                        color = BrandMuted,
+                                        border = androidx.compose.foundation.BorderStroke(1.dp, BorderSubtle)
                                     ) {
                                         Text(
-                                            text = letter,
+                                            text = "Soal Nomor ${state.currentIndex + 1} dari ${state.questions.size}",
                                             fontFamily = DMSansFontFamily,
-                                            fontWeight = FontWeight.Bold,
+                                            fontWeight = FontWeight.SemiBold,
                                             fontSize = 12.sp,
-                                            color = if (isSelected) Color.White else TextSecondary
+                                            color = TextPrimary,
+                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                                         )
                                     }
 
-                                    Spacer(modifier = Modifier.width(12.dp))
-
-                                    Text(
-                                        text = choice,
-                                        fontFamily = DMSansFontFamily,
-                                        fontSize = 14.sp,
-                                        color = if (isSelected) TextPrimary else TextSecondary,
-                                        lineHeight = 20.sp,
-                                        modifier = Modifier.weight(1f)
-                                    )
-
-                                    if (isSelected) {
-                                        Icon(
-                                            imageVector = Icons.Default.Check,
-                                            contentDescription = null,
-                                            tint = BrandNavy,
-                                            modifier = Modifier.size(16.dp)
+                                    Surface(
+                                        shape = RoundedCornerShape(6.dp),
+                                        color = StatusSuccessLight
+                                    ) {
+                                        Text(
+                                            text = currentQ.type.replace("_", " ").uppercase(),
+                                            fontFamily = DMSansFontFamily,
+                                            fontWeight = FontWeight.SemiBold,
+                                            fontSize = 11.sp,
+                                            color = StatusSuccess,
+                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
                                         )
+                                    }
+                                }
+                            }
+
+                            item {
+                                Text(
+                                    text = currentQ.bodyHtml.replace(Regex("<[^>]*>"), ""),
+                                    fontFamily = DMSansFontFamily,
+                                    fontSize = 15.sp,
+                                    lineHeight = 22.sp,
+                                    color = TextPrimary,
+                                    modifier = Modifier.padding(bottom = 20.dp)
+                                )
+                            }
+
+                            if (currentQ.choices != null) {
+                                itemsIndexed(currentQ.choices) { index, choice ->
+                                    val letter = ('A' + index).toString()
+                                    val isSelected = selectedChoice == choice
+
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(vertical = 5.dp)
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .border(
+                                                width = if (isSelected) 1.5.dp else 1.dp,
+                                                color = if (isSelected) BorderFocus else BorderSubtle,
+                                                shape = RoundedCornerShape(8.dp)
+                                            )
+                                            .background(
+                                                color = if (isSelected) BrandNavySubtle else BrandSurface
+                                            )
+                                            // Answers are frozen while the paper is being submitted.
+                                            .clickable(enabled = state.canAnswer) {
+                                                onSelectAnswer(currentQ.id, choice)
+                                            }
+                                            .padding(horizontal = 14.dp, vertical = 12.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(28.dp)
+                                                .clip(CircleShape)
+                                                .background(if (isSelected) BrandNavy else BrandMuted)
+                                                .border(
+                                                    1.dp,
+                                                    if (isSelected) BrandNavy else BorderSubtle,
+                                                    CircleShape
+                                                ),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Text(
+                                                text = letter,
+                                                fontFamily = DMSansFontFamily,
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 12.sp,
+                                                color = if (isSelected) Color.White else TextSecondary
+                                            )
+                                        }
+
+                                        Spacer(modifier = Modifier.width(12.dp))
+
+                                        Text(
+                                            text = choice,
+                                            fontFamily = DMSansFontFamily,
+                                            fontSize = 14.sp,
+                                            color = if (isSelected) TextPrimary else TextSecondary,
+                                            lineHeight = 20.sp,
+                                            modifier = Modifier.weight(1f)
+                                        )
+
+                                        if (isSelected) {
+                                            Icon(
+                                                imageVector = Icons.Default.Check,
+                                                contentDescription = null,
+                                                tint = BrandNavy,
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                        }
                                     }
                                 }
                             }
                         }
                     }
                 }
+            }
+        }
+    }
+}
+
+/**
+ * Shown when the paper cannot be displayed at all (no cache + offline, or an empty
+ * payload for an active session). Offers a retry that forces a network fetch.
+ */
+@Composable
+private fun ExamErrorContent(
+    message: String,
+    modifier: Modifier = Modifier,
+    onRetry: () -> Unit
+) {
+    Box(
+        modifier = modifier,
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 32.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Icon(
+                imageVector = Icons.Default.Warning,
+                contentDescription = null,
+                tint = StatusError,
+                modifier = Modifier.size(36.dp)
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+            Text(
+                text = "Soal gagal dimuat",
+                fontFamily = DMSansFontFamily,
+                fontWeight = FontWeight.Bold,
+                fontSize = 16.sp,
+                color = TextPrimary,
+                textAlign = TextAlign.Center
+            )
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(
+                text = message,
+                fontFamily = DMSansFontFamily,
+                fontSize = 13.sp,
+                color = TextMuted,
+                textAlign = TextAlign.Center,
+                lineHeight = 19.sp
+            )
+            Spacer(modifier = Modifier.height(18.dp))
+            Button(
+                onClick = onRetry,
+                shape = RoundedCornerShape(8.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = BrandNavy),
+                modifier = Modifier.height(40.dp)
+            ) {
+                Text(
+                    text = "Coba Lagi",
+                    fontFamily = DMSansFontFamily,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 13.sp
+                )
             }
         }
     }
