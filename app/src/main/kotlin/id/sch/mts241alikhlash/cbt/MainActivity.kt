@@ -158,15 +158,42 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    /** Test seam: toggles exam-active state without touching the UI tree. */
+    internal fun setExamActiveForTest(active: Boolean) {
+        isExamActive = active
+        applyExamWindowFlags()
+    }
+
+    private fun applyExamWindowFlags() {
+        if (isExamActive) {
+            window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        } else {
+            window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
+    }
+
     private fun startKioskMode() {
+        applyExamWindowFlags()
         runCatching {
             startLockTask()
         }
     }
 
     private fun stopKioskMode() {
+        isExamActive = false
+        applyExamWindowFlags()
         runCatching {
             stopLockTask()
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // Lock-task pinning is dropped when the screen turns off or the task is
+        // backgrounded; re-arm it so returning to the app restores the kiosk.
+        if (isExamActive) {
+            applyExamWindowFlags()
+            runCatching { startLockTask() }
         }
     }
 }
