@@ -1,5 +1,6 @@
 package id.sch.mts241alikhlash.cbt
 
+import android.app.ActivityManager
 import android.app.admin.DevicePolicyManager
 import android.content.ComponentName
 import android.os.Bundle
@@ -11,6 +12,8 @@ import androidx.compose.runtime.*
 import androidx.lifecycle.lifecycleScope
 import id.sch.mts241alikhlash.cbt.data.session.RestoreOutcome
 import id.sch.mts241alikhlash.cbt.kiosk.ExamDeviceAdminReceiver
+import id.sch.mts241alikhlash.cbt.kiosk.KioskPolicy
+import id.sch.mts241alikhlash.cbt.ui.KioskWarningOverlay
 import id.sch.mts241alikhlash.cbt.data.session.endExamSession
 import id.sch.mts241alikhlash.cbt.data.session.restoreExamSession
 import id.sch.mts241alikhlash.cbt.ui.AppRootState
@@ -23,6 +26,9 @@ class MainActivity : ComponentActivity() {
 
     private var cheatWarningCount = 0
     private var isExamActive = false
+
+    /** True when the OS confirms the task is actually pinned; gates the exam UI. */
+    private val isPinned = mutableStateOf(false)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -105,6 +111,15 @@ class MainActivity : ComponentActivity() {
                     }
                 },
                 examContent = { sessionId, deadline ->
+                    if (isExamActive && !isPinned.value) {
+                        KioskWarningOverlay(
+                            onRetry = {
+                                runCatching { startLockTask() }
+                                verifyPinState()
+                            }
+                        )
+                        return@AssessmentAppRoot
+                    }
                     val viewModel = remember(sessionId) {
                         ExamViewModel(
                             repository = app.repository,
@@ -177,6 +192,7 @@ class MainActivity : ComponentActivity() {
 
     private fun startKioskMode() {
         applyExamWindowFlags()
+        isPinned.value = false
         runCatching {
             // With Device Owner the system pins silently and blocks the escape
             // gesture; without it Android always shows a dismissible dialog.
@@ -213,6 +229,7 @@ class MainActivity : ComponentActivity() {
 
     private fun stopKioskMode() {
         isExamActive = false
+        isPinned.value = false
         clearDeviceOwnerPolicies()
         applyExamWindowFlags()
         runCatching {
@@ -222,12 +239,26 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
-        if (isExamActive) applyDeviceOwnerPolicies()
-        // Lock-task pinning is dropped when the screen turns off or the task is
-        // backgrounded; re-arm it so returning to the app restores the kiosk.
         if (isExamActive) {
+            applyDeviceOwnerPolicies()
             applyExamWindowFlags()
+            // Lock-task pinning is dropped when the screen turns off or the task is
+            // backgrounded; re-arm it so returning to the app restores the kiosk.
             runCatching { startLockTask() }
+            verifyPinState()
+        }
+    }
+
+    /**
+     * The system may silently refuse pinning (user tapped "No thanks", or an OEM
+     * dropped the lock). Never assume it worked: ask, then gate the exam.
+     */
+    private fun verifyPinState() {
+        val am = getSystemService(ActivityManager::class.java)
+        val state = am?.lockTaskModeState ?: ActivityManager.LOCK_TASK_MODE_NONE
+        isPinned.value = KioskPolicy.isSecure(state)
+        if (!isPinned.value) {
+            android.util.Log.w("MainActivity", "Exam running without pin; state=$state")
         }
     }
 }
