@@ -149,10 +149,6 @@ class ExamRepository(
      * [SyncReport.failed] is the *authoritative* count of rows still unsynced after the
      * pass, not the number of errors observed. That closes the gap where a student edits
      * an answer mid-sync and the snapshot taken before the loop goes stale.
-     *
-     * Sends are serialised with [recordAnswer], so an older revision can never reach the
-     * server after a newer one. A closed session stops the pass; a rejected answer is sent
-     * once per pass and does not block the rest.
      */
     suspend fun syncPending(sessionId: String): SyncReport {
         var synced = 0
@@ -185,10 +181,6 @@ class ExamRepository(
         return SyncReport(synced = synced, failed = remaining, rejected = rejected, closedMessage = closedMessage)
     }
 
-    /**
-     * Copies the answers the server already holds into rows that do not exist locally.
-     * A local row, synced or not, is never overwritten. Returns how many were imported.
-     */
     suspend fun pullServerAnswers(sessionId: String): Int {
         val remote = guarded { api.getAnswers(sessionId) }
         var imported = 0

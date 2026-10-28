@@ -79,12 +79,6 @@ fun syncPendingInBackground(
     onResult(result)
 }
 
-/**
- * Asks the server whether this device still owns the session.
- *
- * A 409 (released or taken over) or a 404 (unknown to the server) means the session is gone from this device (released by a supervisor or
- * taken over elsewhere). Offline or slow checks must never block an exam in progress.
- */
 private suspend fun sessionLostMessage(sessionId: String, validate: suspend (String) -> Unit): String? =
     try {
         withTimeoutOrNull(RESTORE_CHECK_TIMEOUT_MS) { validate(sessionId) }

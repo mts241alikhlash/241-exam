@@ -240,8 +240,6 @@ class ExamViewModel(
             flushDrafts()
             val report = repository.syncPending(sessionId)
             // syncPending re-reads the queue, so `failed` is the truth at this moment.
-            // A rejected answer can never be sent, and a closed session is finished by
-            // the server itself, so neither may keep the student from handing in.
             val lost = report.closedMessage?.takeIf { it != WINDOW_CLOSED_MESSAGE }
             val blocking = report.failed - report.rejected
             if (lost != null) {
