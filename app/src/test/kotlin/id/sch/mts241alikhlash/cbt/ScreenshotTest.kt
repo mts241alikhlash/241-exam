@@ -115,6 +115,20 @@ class ScreenshotTest {
         paparazzi.snapshot { PreviewExamScreen() }
     }
 
+    /**
+     * R4: the primary action must survive the narrowest width *and* a large font.
+     *
+     * At fontScale 1.5 the three-button row cannot fit "Selanjutnya" at 13sp, and the
+     * old single-row layout clipped it mid-glyph ("Selanjutn") because `maxLines = 1`
+     * with `softWrap = false` defaults to [TextOverflow.Clip]. The bar now switches to
+     * two rows above fontScale 1.2, so this snapshot pins the primary label intact.
+     */
+    @Test
+    fun examScreenNarrowLargeFont() {
+        paparazzi.unsafeUpdateConfig(deviceConfig = NarrowLargeFontDeviceConfig)
+        paparazzi.snapshot { PreviewExamScreen() }
+    }
+
     /** R2: a genuinely resumed paper renders the notice banner. */
     @Test
     fun examScreenResumed() {
@@ -160,6 +174,14 @@ private val NarrowDeviceConfig = DeviceConfig.PIXEL_5.copy(
     ydpi = 160,
     density = com.android.resources.Density.MEDIUM,
 )
+
+/**
+ * [NarrowDeviceConfig] at the accessibility font scale the defect was reported at.
+ *
+ * 1.5x is the largest "Large" setting in Android's display-size settings; anything
+ * below it that fits will fit at 1.5x only if the layout adapts, which it now does.
+ */
+private val NarrowLargeFontDeviceConfig = NarrowDeviceConfig.copy(fontScale = 1.5f)
 
 /** Renders the exam screen with the same fixture used by [ScreenshotTest.examScreen]. */
 @Composable
