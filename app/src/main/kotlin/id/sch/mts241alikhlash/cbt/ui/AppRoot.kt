@@ -40,7 +40,8 @@ data class AppRootState(
     val user: AuthUser? = null,
     val selectedExam: ExamSummaryDto? = null,
     val starting: Boolean = false,
-    val startError: String? = null
+    val startError: String? = null,
+    val notice: String? = null
 )
 
 @Composable

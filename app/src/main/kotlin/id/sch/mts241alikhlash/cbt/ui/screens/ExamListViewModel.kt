@@ -46,3 +46,19 @@ class ExamListViewModel(private val catalog: ExamCatalogRepository) : ViewModel(
         }
     }
 }
+
+fun examStatusLabel(status: String, startsAt: String, zone: java.time.ZoneId = java.time.ZoneId.systemDefault()): String =
+    when (status) {
+        "OPEN" -> "Dibuka · Mulai"
+        "IN_PROGRESS" -> "Sedang berlangsung · Lanjutkan"
+        "UPCOMING" -> openingTime(startsAt, zone)?.let { "Dibuka $it" } ?: "Belum dibuka"
+        "FINISHED" -> "Selesai"
+        else -> status
+    }
+
+private fun openingTime(startsAt: String, zone: java.time.ZoneId): String? =
+    runCatching {
+        java.time.OffsetDateTime.parse(startsAt)
+            .atZoneSameInstant(zone)
+            .format(java.time.format.DateTimeFormatter.ofPattern("EEE, d MMM yyyy HH.mm", java.util.Locale.forLanguageTag("id-ID")))
+    }.getOrNull()

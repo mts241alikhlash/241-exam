@@ -87,7 +87,8 @@ class MainActivity : ComponentActivity() {
                     val outcome = restoreExamSession(
                         sessionRepository = app.sessionRepository,
                         scope = lifecycleScope,
-                        syncPending = app.repository::syncPending
+                        syncPending = app.repository::syncPending,
+                        validate = { id -> app.repository.pullServerAnswers(id) }
                     ) { result ->
                         result.exceptionOrNull()?.let {
                             // Startup sync is best effort: report, never block the exam.
@@ -104,6 +105,15 @@ class MainActivity : ComponentActivity() {
                             user = runCatching { app.authRepository.currentStudent() }.getOrNull(),
                             sessionId = outcome.session.sessionId,
                             deadline = outcome.session.deadline
+                        )
+                    }
+
+                    is RestoreOutcome.SessionLost -> {
+                        val storedUser = runCatching { app.authRepository.currentStudent() }.getOrNull()
+                        appState = AppRootState(
+                            restoreComplete = true,
+                            user = storedUser,
+                            notice = outcome.message
                         )
                     }
 
@@ -138,7 +148,8 @@ class MainActivity : ComponentActivity() {
                                     app.catalogRepository,
                                     app.sessionRepository,
                                     exam.id,
-                                    accessCode
+                                    accessCode,
+                                    pullAnswers = { id -> app.repository.pullServerAnswers(id) }
                                 )
                             }
                             val failure = started.exceptionOrNull()
@@ -187,7 +198,8 @@ class MainActivity : ComponentActivity() {
                     ExamListScreen(
                         studentName = appState.user?.name.orEmpty(),
                         viewModel = listViewModel,
-                        onSelect = { appState = appState.copy(selectedExam = it, startError = null) },
+                        notice = appState.notice,
+                        onSelect = { appState = appState.copy(selectedExam = it, startError = null, notice = null) },
                         onLogout = {
                             lifecycleScope.launch {
                                 app.authRepository.logout()
