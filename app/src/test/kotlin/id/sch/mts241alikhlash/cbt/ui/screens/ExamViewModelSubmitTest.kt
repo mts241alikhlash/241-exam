@@ -345,6 +345,8 @@ private class SubmitFakeAnswerDao(
     override suspend fun getAnswer(sessionId: String, questionId: String): CachedAnswerEntity? =
         rows[questionId]?.takeIf { it.sessionId == sessionId }
 
+    override suspend fun insertIfAbsent(answer: CachedAnswerEntity): Long = 1L
+
     override suspend fun getUnsyncedAnswers(sessionId: String): List<CachedAnswerEntity> {
         if (syncThrows) throw IllegalStateException("database closed")
         return rows.values.filter { it.sessionId == sessionId && !it.isSynced }

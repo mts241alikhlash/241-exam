@@ -308,6 +308,8 @@ private class FakeAnswerDao : AnswerDao {
     override suspend fun getAnswer(sessionId: String, questionId: String): CachedAnswerEntity? =
         null
 
+    override suspend fun insertIfAbsent(answer: CachedAnswerEntity): Long = 1L
+
     override suspend fun getUnsyncedAnswers(sessionId: String): List<CachedAnswerEntity> =
         emptyList()
 
