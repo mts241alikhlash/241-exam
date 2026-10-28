@@ -123,6 +123,10 @@ class ExamRepository(
             isSynced = false,
             updatedAt = now()
         )
+        if (answer.isBlank()) {
+            dao.saveAnswer(entity.copy(isSynced = true))
+            return SendOutcome.Sent
+        }
         dao.saveAnswer(entity)
 
         return sendLock.withLock {

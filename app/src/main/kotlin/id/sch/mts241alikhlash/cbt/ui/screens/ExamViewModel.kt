@@ -2,6 +2,7 @@ package id.sch.mts241alikhlash.cbt.ui.screens
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import id.sch.mts241alikhlash.cbt.data.model.AnswerPayload
 import id.sch.mts241alikhlash.cbt.data.model.PaperQuestionDto
 import id.sch.mts241alikhlash.cbt.data.remote.ApiException
 import id.sch.mts241alikhlash.cbt.data.repository.ExamRepository
@@ -18,7 +19,8 @@ data class ExamUiState(
     val errorMessage: String? = null,
     val questions: List<PaperQuestionDto> = emptyList(),
     val currentIndex: Int = 0,
-    val answers: Map<String, String> = emptyMap(),
+    val answers: Map<String, AnswerPayload> = emptyMap(),
+    val drafts: Map<String, String> = emptyMap(),
     val doubtfuls: Set<String> = emptySet(),
     val remainingSeconds: Long = ExamTimer.EXAM_DURATION_SECONDS,
     val isSubmitted: Boolean = false,
@@ -99,7 +101,9 @@ class ExamViewModel(
     private fun observeLocalAnswers() {
         viewModelScope.launch {
             repository.observeAnswers(sessionId).collect { list ->
-                val answerMap = list.associate { it.questionId to it.answer }
+                val answerMap = list.mapNotNull { row ->
+                    AnswerPayload.decode(row.answer)?.let { row.questionId to it }
+                }.toMap()
                 val doubtSet = list.filter { it.isDoubtful }.map { it.questionId }.toSet()
                 _uiState.value = _uiState.value.copy(
                     answers = answerMap,
@@ -136,17 +140,59 @@ class ExamViewModel(
         }
     }
 
-    fun selectAnswer(questionId: String, answer: String) {
+    private val optimistic = mutableMapOf<String, AnswerPayload>()
+    private val textJobs = mutableMapOf<String, Job>()
+
+    private fun currentAnswer(questionId: String): AnswerPayload? =
+        optimistic[questionId] ?: _uiState.value.answers[questionId]
+
+    fun selectAnswer(questionId: String, answer: AnswerPayload) {
         if (!_uiState.value.canAnswer) return
+        optimistic[questionId] = answer
         val currentDoubt = _uiState.value.doubtfuls.contains(questionId)
         viewModelScope.launch {
-            repository.recordAnswer(questionId, sessionId, answer, currentDoubt)
+            repository.recordAnswer(questionId, sessionId, answer.encode(), currentDoubt)
+        }
+    }
+
+    fun toggleKey(questionId: String, key: String) {
+        val current = (currentAnswer(questionId) as? AnswerPayload.Multiple)?.keys.orEmpty()
+        val next = if (key in current) current - key else current + key
+        selectAnswer(questionId, AnswerPayload.Multiple(next.sorted()))
+    }
+
+    fun updateText(questionId: String, text: String) {
+        if (!_uiState.value.canAnswer) return
+        val clamped = text.take(MAX_TEXT_LENGTH)
+        _uiState.value = _uiState.value.copy(drafts = _uiState.value.drafts + (questionId to clamped))
+        textJobs[questionId]?.cancel()
+        textJobs[questionId] = viewModelScope.launch {
+            delay(TEXT_DEBOUNCE_MS)
+            commitDraft(questionId)
+        }
+    }
+
+    private suspend fun commitDraft(questionId: String) {
+        val text = _uiState.value.drafts[questionId] ?: return
+        val payload = AnswerPayload.Text(text)
+        optimistic[questionId] = payload
+        val doubt = _uiState.value.doubtfuls.contains(questionId)
+        repository.recordAnswer(questionId, sessionId, payload.encode(), doubt)
+        if (_uiState.value.drafts[questionId] == text) {
+            _uiState.value = _uiState.value.copy(drafts = _uiState.value.drafts - questionId)
+        }
+    }
+
+    private suspend fun flushDrafts() {
+        for (questionId in _uiState.value.drafts.keys.toList()) {
+            textJobs.remove(questionId)?.cancel()
+            commitDraft(questionId)
         }
     }
 
     fun toggleDoubtful(questionId: String) {
         if (!_uiState.value.canAnswer) return
-        val currentAnswer = _uiState.value.answers[questionId] ?: ""
+        val currentAnswer = currentAnswer(questionId)?.encode() ?: ""
         val newDoubt = !_uiState.value.doubtfuls.contains(questionId)
         viewModelScope.launch {
             repository.recordAnswer(questionId, sessionId, currentAnswer, newDoubt)
@@ -156,6 +202,7 @@ class ExamViewModel(
     fun goToIndex(index: Int) {
         if (index in _uiState.value.questions.indices) {
             _uiState.value = _uiState.value.copy(currentIndex = index)
+            viewModelScope.launch { flushDrafts() }
         }
     }
 
@@ -170,6 +217,7 @@ class ExamViewModel(
     private suspend fun runSubmit(): Boolean {
         _uiState.value = _uiState.value.copy(isSubmitting = true, submitError = null)
         return try {
+            flushDrafts()
             val report = repository.syncPending(sessionId)
             // syncPending re-reads the queue, so `failed` is the truth at this moment.
             // A rejected answer can never be sent, and a closed session is finished by
@@ -200,6 +248,8 @@ class ExamViewModel(
 
     companion object {
         const val EMPTY_PAPER_MESSAGE = "Soal ujian tidak tersedia. Periksa koneksi lalu coba lagi."
+        const val TEXT_DEBOUNCE_MS = 600L
+        const val MAX_TEXT_LENGTH = 20_000
         const val AUTO_SUBMIT_RETRY_MS = 5_000L
         const val AUTO_SUBMIT_MAX_ATTEMPTS = 120
         const val SUBMIT_ERROR_MESSAGE = "Gagal mengumpulkan jawaban. Coba lagi."

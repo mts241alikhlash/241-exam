@@ -19,6 +19,7 @@ fun questionTypeLabel(type: String): String {
     if (normalized.isEmpty()) return "SOAL"
     return when (normalized.lowercase(Locale.ROOT)) {
         "multiple_choice" -> "PILIHAN GANDA"
+        "multiple_response" -> "PILIHAN GANDA KOMPLEKS"
         "true_false" -> "BENAR / SALAH"
         "essay" -> "URAIAN"
         "short_answer" -> "JAWABAN SINGKAT"

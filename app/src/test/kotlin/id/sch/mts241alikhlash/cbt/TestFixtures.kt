@@ -18,8 +18,12 @@ class InMemoryAnswerDao(vararg initial: id.sch.mts241alikhlash.cbt.data.local.Ca
     id.sch.mts241alikhlash.cbt.data.local.AnswerDao {
     val rows = initial.associateBy { it.questionId }.toMutableMap()
 
+    private val changes = kotlinx.coroutines.flow.MutableStateFlow(0)
+
     override fun observeAnswers(sessionId: String): kotlinx.coroutines.flow.Flow<List<id.sch.mts241alikhlash.cbt.data.local.CachedAnswerEntity>> =
-        kotlinx.coroutines.flow.flowOf(rows.values.filter { it.sessionId == sessionId })
+        kotlinx.coroutines.flow.flow {
+            changes.collect { emit(rows.values.filter { it.sessionId == sessionId }) }
+        }
 
     override suspend fun getAnswer(sessionId: String, questionId: String) =
         rows[questionId]?.takeIf { it.sessionId == sessionId }
@@ -32,11 +36,13 @@ class InMemoryAnswerDao(vararg initial: id.sch.mts241alikhlash.cbt.data.local.Ca
 
     override suspend fun saveAnswer(answer: id.sch.mts241alikhlash.cbt.data.local.CachedAnswerEntity) {
         rows[answer.questionId] = answer
+        changes.value++
     }
 
     override suspend fun insertIfAbsent(answer: id.sch.mts241alikhlash.cbt.data.local.CachedAnswerEntity): Long {
         if (rows.containsKey(answer.questionId)) return -1L
         rows[answer.questionId] = answer
+        changes.value++
         return 1L
     }
 
@@ -44,6 +50,7 @@ class InMemoryAnswerDao(vararg initial: id.sch.mts241alikhlash.cbt.data.local.Ca
         val row = rows[questionId] ?: return 0
         if (row.sessionId != sessionId || row.answer != answer || row.updatedAt != updatedAt || row.isSynced) return 0
         rows[questionId] = row.copy(isSynced = true)
+        changes.value++
         return 1
     }
 }

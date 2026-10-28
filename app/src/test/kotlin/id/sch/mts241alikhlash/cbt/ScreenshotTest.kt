@@ -1,5 +1,6 @@
 package id.sch.mts241alikhlash.cbt
 
+import id.sch.mts241alikhlash.cbt.data.model.AnswerPayload
 import id.sch.mts241alikhlash.cbt.choices
 import androidx.compose.runtime.Composable
 import app.cash.paparazzi.DeviceConfig
@@ -97,7 +98,7 @@ class ScreenshotTest {
             isLoading = false,
             questions = questions,
             currentIndex = 0,
-            answers = mapOf("q1" to "96"),
+            answers = mapOf("q1" to AnswerPayload.Choice("B")),
             doubtfuls = setOf("q2"),
             remainingSeconds = 5340,
         )
@@ -105,7 +106,7 @@ class ScreenshotTest {
             CBTTheme {
                 ExamContent(
                     state = state,
-                    onSelectAnswer = { _, _ -> },
+                    onAnswer = { _, _ -> },
                     onToggleDoubtful = {},
                     onGoToIndex = {},
                     onSubmit = {},
@@ -131,7 +132,7 @@ class ScreenshotTest {
                         isLoading = false,
                         errorMessage = "Tidak dapat memuat soal. Periksa koneksi.",
                     ),
-                    onSelectAnswer = { _, _ -> },
+                    onAnswer = { _, _ -> },
                     onToggleDoubtful = {},
                     onGoToIndex = {},
                     onSubmit = {},
@@ -189,7 +190,7 @@ class ScreenshotTest {
             CBTTheme {
                 ExamContent(
                     state = state,
-                    onSelectAnswer = { _, _ -> },
+                    onAnswer = { _, _ -> },
                     onToggleDoubtful = {},
                     onGoToIndex = {},
                     onSubmit = {},
@@ -250,14 +251,14 @@ private fun PreviewExamScreen() {
             ),
         ),
         currentIndex = 0,
-        answers = mapOf("q1" to "96"),
+        answers = mapOf("q1" to AnswerPayload.Choice("B")),
         doubtfuls = setOf("q2"),
         remainingSeconds = 5340,
     )
     CBTTheme {
         ExamContent(
             state = state,
-            onSelectAnswer = { _, _ -> },
+            onAnswer = { _, _ -> },
             onToggleDoubtful = {},
             onGoToIndex = {},
             onSubmit = {},
