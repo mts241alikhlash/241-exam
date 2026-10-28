@@ -104,6 +104,33 @@ class ScreenshotTest {
     }
 
     /**
+     * R5: the error panel must always offer a way out.
+     *
+     * "Coba Lagi" alone traps the student when the network stays down, so the
+     * supervisor exit link is part of the layout contract.
+     */
+    @Test
+    fun examErrorScreenHasSupervisorExit() {
+        paparazzi.snapshot {
+            CBTTheme {
+                ExamContent(
+                    state = ExamUiState(
+                        isLoading = false,
+                        errorMessage = "Tidak dapat memuat soal. Periksa koneksi.",
+                    ),
+                    onSelectAnswer = { _, _ -> },
+                    onToggleDoubtful = {},
+                    onGoToIndex = {},
+                    onSubmit = {},
+                    onRetry = {},
+                    onFinish = {},
+                    onSupervisorExit = {},
+                )
+            }
+        }
+    }
+
+    /**
      * R3: the bottom bar must fit a 320dp-wide screen.
      *
      * "Selanjutnya" is the longest label and used to be clipped at this width, so this
