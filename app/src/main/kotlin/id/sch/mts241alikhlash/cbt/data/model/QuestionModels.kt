@@ -1,30 +1,41 @@
 package id.sch.mts241alikhlash.cbt.data.model
 
-import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonObject
 
 @Serializable
-data class StudentQuestionDto(
+data class PaperChoiceDto(
+    val key: String,
+    val html: String
+)
+
+@Serializable
+data class PaperQuestionDto(
     val id: String,
     val number: Int,
     val type: String,
-    @SerialName("body_html") val bodyHtml: String,
-    val choices: List<String>? = null
+    val bodyHtml: String,
+    val points: Double,
+    val choices: List<PaperChoiceDto>? = null
 )
 
 @Serializable
-data class SubmitAnswerRequest(
-    @SerialName("question_id") val questionId: String,
-    val answer: String,
-    @SerialName("client_id") val clientId: String
+data class SaveAnswerRequest(
+    val questionId: String,
+    val clientId: String,
+    val answer: JsonObject
 )
 
 @Serializable
-data class StudentAnswerDto(
-    val id: String,
-    @SerialName("session_id") val sessionId: String,
-    @SerialName("student_id") val studentId: String,
-    @SerialName("question_id") val questionId: String,
-    val answer: String,
-    @SerialName("updated_at") val updatedAt: String
+data class SavedAnswerAckDto(
+    val questionId: String,
+    val clientId: String,
+    val receivedAfterDeadline: Boolean,
+    val updatedAt: String
+)
+
+@Serializable
+data class SavedAnswerDto(
+    val questionId: String,
+    val answer: JsonObject
 )

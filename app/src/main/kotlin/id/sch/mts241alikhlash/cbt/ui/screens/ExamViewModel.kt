@@ -2,7 +2,7 @@ package id.sch.mts241alikhlash.cbt.ui.screens
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import id.sch.mts241alikhlash.cbt.data.model.StudentQuestionDto
+import id.sch.mts241alikhlash.cbt.data.model.PaperQuestionDto
 import id.sch.mts241alikhlash.cbt.data.repository.ExamRepository
 import id.sch.mts241alikhlash.cbt.data.session.ExamTimer
 import kotlinx.coroutines.Job
@@ -15,7 +15,7 @@ import kotlinx.coroutines.launch
 data class ExamUiState(
     val isLoading: Boolean = true,
     val errorMessage: String? = null,
-    val questions: List<StudentQuestionDto> = emptyList(),
+    val questions: List<PaperQuestionDto> = emptyList(),
     val currentIndex: Int = 0,
     val answers: Map<String, String> = emptyMap(),
     val doubtfuls: Set<String> = emptySet(),

@@ -1,13 +1,17 @@
 package id.sch.mts241alikhlash.cbt.ui.screens
 
+import id.sch.mts241alikhlash.cbt.choices
+import id.sch.mts241alikhlash.cbt.ackFor
 import id.sch.mts241alikhlash.cbt.MainDispatcherRule
 import id.sch.mts241alikhlash.cbt.data.local.AnswerDao
 import id.sch.mts241alikhlash.cbt.data.local.CachedAnswerEntity
 import id.sch.mts241alikhlash.cbt.data.local.CachedQuestionEntity
 import id.sch.mts241alikhlash.cbt.data.local.QuestionDao
-import id.sch.mts241alikhlash.cbt.data.model.StudentAnswerDto
-import id.sch.mts241alikhlash.cbt.data.model.StudentQuestionDto
-import id.sch.mts241alikhlash.cbt.data.model.SubmitAnswerRequest
+import id.sch.mts241alikhlash.cbt.data.model.SavedAnswerAckDto
+import id.sch.mts241alikhlash.cbt.data.model.SavedAnswerDto
+import id.sch.mts241alikhlash.cbt.data.model.SubmittedSessionDto
+import id.sch.mts241alikhlash.cbt.data.model.PaperQuestionDto
+import id.sch.mts241alikhlash.cbt.data.model.SaveAnswerRequest
 import id.sch.mts241alikhlash.cbt.data.remote.ExamApiService
 import id.sch.mts241alikhlash.cbt.data.repository.ExamRepository
 import kotlinx.coroutines.CompletableDeferred
@@ -311,7 +315,7 @@ private fun repoWithPending(
 }
 
 private fun repoWithQuestions(
-    questions: List<StudentQuestionDto> = emptyList(),
+    questions: List<PaperQuestionDto> = emptyList(),
     api: ExamApiService = RecordingQuestionsApi(questions)
 ): ExamRepository = ExamRepository(
     api = api,
@@ -319,12 +323,13 @@ private fun repoWithQuestions(
     questionDao = SubmitFakeQuestionDao(emptyList())
 )
 
-private fun dto(id: String) = StudentQuestionDto(
+private fun dto(id: String) = PaperQuestionDto(
     id = id,
     number = 1,
     type = "multiple_choice",
     bodyHtml = "<p>Soal $id</p>",
-    choices = listOf("A", "B")
+    points = 1.0,
+    choices = choices("A", "B")
 )
 
 private class SubmitFakeAnswerDao(
@@ -373,7 +378,7 @@ private class SubmitFakeAnswerDao(
 }
 
 private class SubmitFakeQuestionDao(
-    preloaded: List<StudentQuestionDto> = emptyList()
+    preloaded: List<PaperQuestionDto> = emptyList()
 ) : QuestionDao {
     private val store = preloaded.toMutableList()
 
@@ -397,25 +402,37 @@ private class SubmitFakeQuestionDao(
 
 /** Every answer upload fails, so any pending answer is reported as failed. */
 private class SubmitFakeApi : ExamApiService {
-    override suspend fun getQuestions(sessionId: String): List<StudentQuestionDto> = emptyList()
+    override suspend fun getAnswers(sessionId: String): List<SavedAnswerDto> = emptyList()
+
+    override suspend fun submit(sessionId: String): SubmittedSessionDto = SubmittedSessionDto("SUBMITTED")
+
+    override suspend fun getQuestions(sessionId: String): List<PaperQuestionDto> = emptyList()
 
     override suspend fun saveAnswer(
         sessionId: String,
-        request: SubmitAnswerRequest
-    ): StudentAnswerDto = throw IOException("offline")
+        request: SaveAnswerRequest
+    ): SavedAnswerAckDto = throw IOException("offline")
 }
 
 /** Every answer upload succeeds. */
 private class RecordingSubmitApi : ExamApiService {
-    override suspend fun getQuestions(sessionId: String): List<StudentQuestionDto> = emptyList()
+    override suspend fun getAnswers(sessionId: String): List<SavedAnswerDto> = emptyList()
+
+    override suspend fun submit(sessionId: String): SubmittedSessionDto = SubmittedSessionDto("SUBMITTED")
+
+    override suspend fun getQuestions(sessionId: String): List<PaperQuestionDto> = emptyList()
 
     override suspend fun saveAnswer(
         sessionId: String,
-        request: SubmitAnswerRequest
-    ): StudentAnswerDto = answerDto(sessionId, request)
+        request: SaveAnswerRequest
+    ): SavedAnswerAckDto = answerDto(sessionId, request)
 }
 
 private class BlockingSubmitApi : ExamApiService {
+    override suspend fun getAnswers(sessionId: String): List<SavedAnswerDto> = emptyList()
+
+    override suspend fun submit(sessionId: String): SubmittedSessionDto = SubmittedSessionDto("SUBMITTED")
+
     private val started = CompletableDeferred<Unit>()
     private val release = CompletableDeferred<Unit>()
     var uploadCount = 0
@@ -424,12 +441,12 @@ private class BlockingSubmitApi : ExamApiService {
     suspend fun awaitUploadStarted() = started.await()
     fun completeUpload() = release.complete(Unit)
 
-    override suspend fun getQuestions(sessionId: String): List<StudentQuestionDto> = emptyList()
+    override suspend fun getQuestions(sessionId: String): List<PaperQuestionDto> = emptyList()
 
     override suspend fun saveAnswer(
         sessionId: String,
-        request: SubmitAnswerRequest
-    ): StudentAnswerDto {
+        request: SaveAnswerRequest
+    ): SavedAnswerAckDto {
         uploadCount++
         started.complete(Unit)
         release.await()
@@ -438,46 +455,58 @@ private class BlockingSubmitApi : ExamApiService {
 }
 
 private class RecordingQuestionsApi(
-    private val questions: List<StudentQuestionDto> = emptyList()
+    private val questions: List<PaperQuestionDto> = emptyList()
 ) : ExamApiService {
+    override suspend fun getAnswers(sessionId: String): List<SavedAnswerDto> = emptyList()
+
+    override suspend fun submit(sessionId: String): SubmittedSessionDto = SubmittedSessionDto("SUBMITTED")
+
     var uploadCount = 0
         private set
 
-    override suspend fun getQuestions(sessionId: String): List<StudentQuestionDto> = questions
+    override suspend fun getQuestions(sessionId: String): List<PaperQuestionDto> = questions
 
     override suspend fun saveAnswer(
         sessionId: String,
-        request: SubmitAnswerRequest
-    ): StudentAnswerDto {
+        request: SaveAnswerRequest
+    ): SavedAnswerAckDto {
         uploadCount++
         return answerDto(sessionId, request)
     }
 }
 
 private class BlockingQuestionsApi : ExamApiService {
+    override suspend fun getAnswers(sessionId: String): List<SavedAnswerDto> = emptyList()
+
+    override suspend fun submit(sessionId: String): SubmittedSessionDto = SubmittedSessionDto("SUBMITTED")
+
     private val never = CompletableDeferred<Unit>()
     var uploadCount = 0
         private set
 
-    override suspend fun getQuestions(sessionId: String): List<StudentQuestionDto> {
+    override suspend fun getQuestions(sessionId: String): List<PaperQuestionDto> {
         never.await()
         return listOf(dto("q1"))
     }
 
     override suspend fun saveAnswer(
         sessionId: String,
-        request: SubmitAnswerRequest
-    ): StudentAnswerDto {
+        request: SaveAnswerRequest
+    ): SavedAnswerAckDto {
         uploadCount++
         return answerDto(sessionId, request)
     }
 }
 
 private class FailingQuestionsApi(private val failFirst: Boolean = false) : ExamApiService {
+    override suspend fun getAnswers(sessionId: String): List<SavedAnswerDto> = emptyList()
+
+    override suspend fun submit(sessionId: String): SubmittedSessionDto = SubmittedSessionDto("SUBMITTED")
+
     var questionCalls = 0
         private set
 
-    override suspend fun getQuestions(sessionId: String): List<StudentQuestionDto> {
+    override suspend fun getQuestions(sessionId: String): List<PaperQuestionDto> {
         questionCalls++
         if (failFirst && questionCalls == 1) throw IOException("offline")
         return listOf(dto("q1"))
@@ -485,15 +514,8 @@ private class FailingQuestionsApi(private val failFirst: Boolean = false) : Exam
 
     override suspend fun saveAnswer(
         sessionId: String,
-        request: SubmitAnswerRequest
-    ): StudentAnswerDto = throw IOException("offline")
+        request: SaveAnswerRequest
+    ): SavedAnswerAckDto = throw IOException("offline")
 }
 
-private fun answerDto(sessionId: String, request: SubmitAnswerRequest) = StudentAnswerDto(
-    id = request.questionId,
-    sessionId = sessionId,
-    studentId = "student",
-    questionId = request.questionId,
-    answer = request.answer,
-    updatedAt = "2026-10-27T00:00:00Z"
-)
+private fun answerDto(sessionId: String, request: SaveAnswerRequest) = ackFor(request)

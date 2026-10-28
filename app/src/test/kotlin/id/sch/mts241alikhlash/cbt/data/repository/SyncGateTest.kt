@@ -1,12 +1,15 @@
 package id.sch.mts241alikhlash.cbt.data.repository
 
+import id.sch.mts241alikhlash.cbt.ackFor
 import id.sch.mts241alikhlash.cbt.data.local.AnswerDao
 import id.sch.mts241alikhlash.cbt.data.local.CachedAnswerEntity
 import id.sch.mts241alikhlash.cbt.data.local.CachedQuestionEntity
 import id.sch.mts241alikhlash.cbt.data.local.QuestionDao
-import id.sch.mts241alikhlash.cbt.data.model.StudentAnswerDto
-import id.sch.mts241alikhlash.cbt.data.model.StudentQuestionDto
-import id.sch.mts241alikhlash.cbt.data.model.SubmitAnswerRequest
+import id.sch.mts241alikhlash.cbt.data.model.SavedAnswerAckDto
+import id.sch.mts241alikhlash.cbt.data.model.SavedAnswerDto
+import id.sch.mts241alikhlash.cbt.data.model.SubmittedSessionDto
+import id.sch.mts241alikhlash.cbt.data.model.PaperQuestionDto
+import id.sch.mts241alikhlash.cbt.data.model.SaveAnswerRequest
 import id.sch.mts241alikhlash.cbt.data.remote.ExamApiService
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.Flow
@@ -122,18 +125,22 @@ class SyncGateTest {
 }
 
 private class BlockingApi : ExamApiService {
+    override suspend fun getAnswers(sessionId: String): List<SavedAnswerDto> = emptyList()
+
+    override suspend fun submit(sessionId: String): SubmittedSessionDto = SubmittedSessionDto("SUBMITTED")
+
     private val started = CompletableDeferred<Unit>()
     private val release = CompletableDeferred<Unit>()
 
     suspend fun awaitUploadStarted() = started.await()
     fun completeUpload() = release.complete(Unit)
 
-    override suspend fun getQuestions(sessionId: String): List<StudentQuestionDto> = emptyList()
+    override suspend fun getQuestions(sessionId: String): List<PaperQuestionDto> = emptyList()
 
     override suspend fun saveAnswer(
         sessionId: String,
-        request: SubmitAnswerRequest
-    ): StudentAnswerDto {
+        request: SaveAnswerRequest
+    ): SavedAnswerAckDto {
         started.complete(Unit)
         release.await()
         return answerDto(sessionId, request)
@@ -141,22 +148,19 @@ private class BlockingApi : ExamApiService {
 }
 
 private class UploadingApi : ExamApiService {
-    override suspend fun getQuestions(sessionId: String): List<StudentQuestionDto> = emptyList()
+    override suspend fun getAnswers(sessionId: String): List<SavedAnswerDto> = emptyList()
+
+    override suspend fun submit(sessionId: String): SubmittedSessionDto = SubmittedSessionDto("SUBMITTED")
+
+    override suspend fun getQuestions(sessionId: String): List<PaperQuestionDto> = emptyList()
 
     override suspend fun saveAnswer(
         sessionId: String,
-        request: SubmitAnswerRequest
-    ): StudentAnswerDto = answerDto(sessionId, request)
+        request: SaveAnswerRequest
+    ): SavedAnswerAckDto = answerDto(sessionId, request)
 }
 
-private fun answerDto(sessionId: String, request: SubmitAnswerRequest) = StudentAnswerDto(
-    id = request.questionId,
-    sessionId = sessionId,
-    studentId = "student",
-    questionId = request.questionId,
-    answer = request.answer,
-    updatedAt = "2026-10-27T00:00:00Z"
-)
+private fun answerDto(sessionId: String, request: SaveAnswerRequest) = ackFor(request)
 
 /** In-memory DAO that honours the markSynced predicate exactly like the SQL does. */
 private class VersionedAnswerDao : AnswerDao {

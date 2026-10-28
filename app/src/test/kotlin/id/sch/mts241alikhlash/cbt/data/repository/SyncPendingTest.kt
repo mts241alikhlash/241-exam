@@ -1,12 +1,15 @@
 package id.sch.mts241alikhlash.cbt.data.repository
 
+import id.sch.mts241alikhlash.cbt.ackFor
 import id.sch.mts241alikhlash.cbt.data.local.AnswerDao
 import id.sch.mts241alikhlash.cbt.data.local.CachedAnswerEntity
 import id.sch.mts241alikhlash.cbt.data.local.CachedQuestionEntity
 import id.sch.mts241alikhlash.cbt.data.local.QuestionDao
-import id.sch.mts241alikhlash.cbt.data.model.StudentAnswerDto
-import id.sch.mts241alikhlash.cbt.data.model.StudentQuestionDto
-import id.sch.mts241alikhlash.cbt.data.model.SubmitAnswerRequest
+import id.sch.mts241alikhlash.cbt.data.model.SavedAnswerAckDto
+import id.sch.mts241alikhlash.cbt.data.model.SavedAnswerDto
+import id.sch.mts241alikhlash.cbt.data.model.SubmittedSessionDto
+import id.sch.mts241alikhlash.cbt.data.model.PaperQuestionDto
+import id.sch.mts241alikhlash.cbt.data.model.SaveAnswerRequest
 import id.sch.mts241alikhlash.cbt.data.remote.ExamApiService
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
@@ -164,25 +167,22 @@ private class SyncFakeQuestionDao : QuestionDao {
 private class SyncFakeApi(
     private val failFor: Set<String> = emptySet()
 ) : ExamApiService {
-    val seen = mutableListOf<SubmitAnswerRequest>()
+    override suspend fun getAnswers(sessionId: String): List<SavedAnswerDto> = emptyList()
 
-    override suspend fun getQuestions(sessionId: String): List<StudentQuestionDto> = emptyList()
+    override suspend fun submit(sessionId: String): SubmittedSessionDto = SubmittedSessionDto("SUBMITTED")
+
+    val seen = mutableListOf<SaveAnswerRequest>()
+
+    override suspend fun getQuestions(sessionId: String): List<PaperQuestionDto> = emptyList()
 
     override suspend fun saveAnswer(
         sessionId: String,
-        request: SubmitAnswerRequest
-    ): StudentAnswerDto {
+        request: SaveAnswerRequest
+    ): SavedAnswerAckDto {
         seen += request
         if (request.questionId in failFor) {
             throw IOException("network failure for ${request.questionId}")
         }
-        return StudentAnswerDto(
-            id = request.questionId,
-            sessionId = sessionId,
-            studentId = "student",
-            questionId = request.questionId,
-            answer = request.answer,
-            updatedAt = "2026-10-27T00:00:00Z"
-        )
+        return ackFor(request)
     }
 }

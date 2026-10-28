@@ -4,16 +4,23 @@ import id.sch.mts241alikhlash.cbt.data.local.AnswerDao
 import id.sch.mts241alikhlash.cbt.data.local.CachedAnswerEntity
 import id.sch.mts241alikhlash.cbt.data.local.CachedQuestionEntity
 import id.sch.mts241alikhlash.cbt.data.local.QuestionDao
-import id.sch.mts241alikhlash.cbt.data.model.StudentQuestionDto
-import id.sch.mts241alikhlash.cbt.data.model.SubmitAnswerRequest
+import id.sch.mts241alikhlash.cbt.data.model.AnswerPayload
+import id.sch.mts241alikhlash.cbt.data.model.PaperChoiceDto
+import id.sch.mts241alikhlash.cbt.data.model.PaperQuestionDto
+import id.sch.mts241alikhlash.cbt.data.model.SaveAnswerRequest
 import id.sch.mts241alikhlash.cbt.data.remote.ExamApiService
 import kotlinx.coroutines.flow.Flow
 import kotlinx.serialization.builtins.ListSerializer
-import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.json.Json
 import kotlin.coroutines.cancellation.CancellationException
 
 data class SyncReport(val synced: Int, val failed: Int)
+
+private fun answerRequest(questionId: String, answer: String, clientId: String) = SaveAnswerRequest(
+    questionId = questionId,
+    clientId = clientId,
+    answer = (AnswerPayload.decode(answer) ?: AnswerPayload.Choice(answer)).toJson()
+)
 
 fun answerClientId(sessionId: String, questionId: String, answer: String, updatedAt: Long): String =
     java.util.UUID.nameUUIDFromBytes("$sessionId|$questionId|$updatedAt|$answer".toByteArray()).toString()
@@ -36,7 +43,7 @@ class ExamRepository(
     suspend fun getQuestions(
         sessionId: String,
         forceRefresh: Boolean = false
-    ): Result<List<StudentQuestionDto>> {
+    ): Result<List<PaperQuestionDto>> {
         val cached = loadCache(sessionId)
         if (!forceRefresh && cached.isNotEmpty() && !isStale(cached)) {
             return Result.success(cached.map { it.toDto() })
@@ -66,7 +73,7 @@ class ExamRepository(
      * Writes the freshly downloaded paper to the cache without letting a cache failure
      * turn a successful download into a blank screen: the network result still wins.
      */
-    private suspend fun cacheQuestions(sessionId: String, remote: List<StudentQuestionDto>) {
+    private suspend fun cacheQuestions(sessionId: String, remote: List<PaperQuestionDto>) {
         try {
             questionDao.replaceForSession(sessionId, remote.map { it.toEntity(sessionId, now()) })
         } catch (cancellation: CancellationException) {
@@ -97,7 +104,7 @@ class ExamRepository(
         dao.saveAnswer(entity)
 
         runCatching {
-            api.saveAnswer(sessionId, SubmitAnswerRequest(questionId, answer, answerClientId(sessionId, questionId, answer, entity.updatedAt)))
+            api.saveAnswer(sessionId, answerRequest(questionId, answer, answerClientId(sessionId, questionId, answer, entity.updatedAt)))
         }.onSuccess {
             // Only this exact revision may be marked: a newer edit made while the
             // request was in flight must stay pending.
@@ -117,11 +124,7 @@ class ExamRepository(
         var synced = 0
         for (item in pending) {
             try {
-                api.saveAnswer(sessionId, SubmitAnswerRequest(
-                        item.questionId,
-                        item.answer,
-                        answerClientId(item.sessionId, item.questionId, item.answer, item.updatedAt)
-                    ))
+                api.saveAnswer(sessionId, answerRequest(item.questionId, item.answer, answerClientId(item.sessionId, item.questionId, item.answer, item.updatedAt)))
                 val marked = dao.markSynced(
                     sessionId = item.sessionId,
                     questionId = item.questionId,
@@ -162,26 +165,27 @@ class ExamRepository(
     }
 }
 
-private fun StudentQuestionDto.toEntity(sessionId: String, cachedAt: Long) = CachedQuestionEntity(
+private fun PaperQuestionDto.toEntity(sessionId: String, cachedAt: Long) = CachedQuestionEntity(
     sessionId = sessionId,
     id = id,
     number = number,
     type = type,
     bodyHtml = bodyHtml,
     choicesJson = choices?.let {
-        ExamRepository.json.encodeToString(ListSerializer(String.serializer()), it)
+        ExamRepository.json.encodeToString(ListSerializer(PaperChoiceDto.serializer()), it)
     },
     cachedAt = cachedAt
 )
 
-private fun CachedQuestionEntity.toDto() = StudentQuestionDto(
+private fun CachedQuestionEntity.toDto() = PaperQuestionDto(
     id = id,
     number = number,
     type = type,
     bodyHtml = bodyHtml,
+    points = 0.0,
     choices = choicesJson?.let { encoded ->
         runCatching {
-            ExamRepository.json.decodeFromString(ListSerializer(String.serializer()), encoded)
+            ExamRepository.json.decodeFromString(ListSerializer(PaperChoiceDto.serializer()), encoded)
         }.getOrNull()
     }
 )

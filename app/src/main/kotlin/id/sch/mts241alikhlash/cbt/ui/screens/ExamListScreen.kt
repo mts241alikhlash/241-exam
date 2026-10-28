@@ -138,7 +138,7 @@ private fun ExamRow(exam: ExamSummaryDto, onSelect: (ExamSummaryDto) -> Unit) {
         )
         Spacer(modifier = Modifier.height(2.dp))
         Text(
-            text = "${exam.subjectName} · ${exam.durationMinutes} menit",
+            text = "${exam.durationMinutes} menit",
             fontSize = 12.sp,
             fontFamily = DMSansFontFamily,
             color = TextSecondary

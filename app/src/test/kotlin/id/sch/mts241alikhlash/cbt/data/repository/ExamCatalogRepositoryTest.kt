@@ -17,7 +17,7 @@ class ExamCatalogRepositoryTest {
     private val exam = ExamSummaryDto(
         id = "e1",
         title = "UTS Matematika",
-        subjectName = "Matematika",
+        subjectId = "s1",
         startsAt = "2026-11-01T01:00:00Z",
         endsAt = "2026-11-01T03:00:00Z",
         durationMinutes = 90,

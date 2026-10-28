@@ -1,5 +1,6 @@
 package id.sch.mts241alikhlash.cbt.ui.screens
 
+import id.sch.mts241alikhlash.cbt.data.model.AnswerPayload
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -601,7 +602,7 @@ fun ExamContent(
                             if (currentQ.choices != null) {
                                 itemsIndexed(currentQ.choices) { index, choice ->
                                     val letter = ('A' + index).toString()
-                                    val isSelected = selectedChoice == choice
+                                    val isSelected = selectedChoice == AnswerPayload.Choice(choice.key).encode()
 
                                     Row(
                                         modifier = Modifier
@@ -618,7 +619,7 @@ fun ExamContent(
                                             )
                                             // Answers are frozen while the paper is being submitted.
                                             .clickable(enabled = state.canAnswer) {
-                                                onSelectAnswer(currentQ.id, choice)
+                                                onSelectAnswer(currentQ.id, AnswerPayload.Choice(choice.key).encode())
                                             }
                                             .padding(horizontal = 14.dp, vertical = 12.dp),
                                         verticalAlignment = Alignment.CenterVertically
@@ -647,7 +648,7 @@ fun ExamContent(
                                         Spacer(modifier = Modifier.width(12.dp))
 
                                         Text(
-                                            text = choice,
+                                            text = choice.html.replace(Regex("<[^>]*>"), ""),
                                             fontFamily = DMSansFontFamily,
                                             fontSize = 14.sp,
                                             color = if (isSelected) TextPrimary else TextSecondary,

@@ -1,12 +1,15 @@
 package id.sch.mts241alikhlash.cbt.data.repository
 
+import id.sch.mts241alikhlash.cbt.choices
 import id.sch.mts241alikhlash.cbt.data.local.AnswerDao
 import id.sch.mts241alikhlash.cbt.data.local.CachedAnswerEntity
 import id.sch.mts241alikhlash.cbt.data.local.CachedQuestionEntity
 import id.sch.mts241alikhlash.cbt.data.local.QuestionDao
-import id.sch.mts241alikhlash.cbt.data.model.StudentAnswerDto
-import id.sch.mts241alikhlash.cbt.data.model.StudentQuestionDto
-import id.sch.mts241alikhlash.cbt.data.model.SubmitAnswerRequest
+import id.sch.mts241alikhlash.cbt.data.model.SavedAnswerAckDto
+import id.sch.mts241alikhlash.cbt.data.model.SavedAnswerDto
+import id.sch.mts241alikhlash.cbt.data.model.SubmittedSessionDto
+import id.sch.mts241alikhlash.cbt.data.model.PaperQuestionDto
+import id.sch.mts241alikhlash.cbt.data.model.SaveAnswerRequest
 import id.sch.mts241alikhlash.cbt.data.remote.ExamApiService
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
@@ -111,7 +114,7 @@ class QuestionCacheTest {
 
     @Test
     fun `choices survive cache round trip`() = runTest {
-        val api = FakeApi(questions = listOf(dto("q1").copy(choices = listOf("A", "B"))))
+        val api = FakeApi(questions = listOf(dto("q1").copy(choices = choices("A", "B"))))
         val dao = FakeQuestionDao()
         ExamRepository(api, FakeAnswerDao(), dao).getQuestions("s1")
 
@@ -125,7 +128,7 @@ class QuestionCacheTest {
             now = { System.currentTimeMillis() }
         )
         val cachedQuestions = offline.getQuestions("s1").getOrThrow()
-        assertEquals(listOf("A", "B"), cachedQuestions.single().choices)
+        assertEquals(choices("A", "B"), cachedQuestions.single().choices)
     }
 
     @Test
@@ -246,11 +249,12 @@ private fun cached(
     cachedAt = cachedAt
 )
 
-private fun dto(id: String) = StudentQuestionDto(
+private fun dto(id: String) = PaperQuestionDto(
     id = id,
     number = 1,
     type = "multiple_choice",
     bodyHtml = "<p>Soal $id</p>",
+    points = 1.0,
     choices = null
 )
 
@@ -307,13 +311,17 @@ private class FakeAnswerDao : AnswerDao {
 }
 
 private class FakeApi(
-    private val questions: List<StudentQuestionDto> = emptyList(),
+    private val questions: List<PaperQuestionDto> = emptyList(),
     private val failure: Throwable? = null
 ) : ExamApiService {
+    override suspend fun getAnswers(sessionId: String): List<SavedAnswerDto> = emptyList()
+
+    override suspend fun submit(sessionId: String): SubmittedSessionDto = SubmittedSessionDto("SUBMITTED")
+
     var calls = 0
         private set
 
-    override suspend fun getQuestions(sessionId: String): List<StudentQuestionDto> {
+    override suspend fun getQuestions(sessionId: String): List<PaperQuestionDto> {
         calls++
         failure?.let { throw it }
         return questions
@@ -321,6 +329,6 @@ private class FakeApi(
 
     override suspend fun saveAnswer(
         sessionId: String,
-        request: SubmitAnswerRequest
-    ): StudentAnswerDto = throw UnsupportedOperationException("not used in QuestionCacheTest")
+        request: SaveAnswerRequest
+    ): SavedAnswerAckDto = throw UnsupportedOperationException("not used in QuestionCacheTest")
 }
