@@ -12,6 +12,7 @@ data class CachedQuestionEntity(
     val number: Int,
     val type: String,
     val bodyHtml: String,
+    val points: Double,
     val choicesJson: String?,
     val cachedAt: Long
 )

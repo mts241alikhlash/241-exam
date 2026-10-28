@@ -9,7 +9,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
     entities = [CachedAnswerEntity::class, CachedQuestionEntity::class],
-    version = 2,
+    version = 3,
     exportSchema = true
 )
 abstract class ExamDatabase : RoomDatabase() {
@@ -36,6 +36,28 @@ abstract class ExamDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("DELETE FROM `cached_answers`")
+                db.execSQL("DROP TABLE `cached_questions`")
+                db.execSQL(
+                    """
+                    CREATE TABLE `cached_questions` (
+                        `sessionId` TEXT NOT NULL,
+                        `id` TEXT NOT NULL,
+                        `number` INTEGER NOT NULL,
+                        `type` TEXT NOT NULL,
+                        `bodyHtml` TEXT NOT NULL,
+                        `points` REAL NOT NULL,
+                        `choicesJson` TEXT,
+                        `cachedAt` INTEGER NOT NULL,
+                        PRIMARY KEY(`sessionId`, `id`)
+                    )
+                    """.trimIndent()
+                )
+            }
+        }
+
         @Volatile
         private var INSTANCE: ExamDatabase? = null
 
@@ -45,7 +67,7 @@ abstract class ExamDatabase : RoomDatabase() {
                     context.applicationContext,
                     ExamDatabase::class.java,
                     "exam_cbt_db"
-                ).addMigrations(MIGRATION_1_2)
+                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3)
                     .build()
                 INSTANCE = instance
                 instance

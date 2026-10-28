@@ -390,6 +390,7 @@ private class SubmitFakeQuestionDao(
                 number = it.number,
                 type = it.type,
                 bodyHtml = it.bodyHtml,
+                points = it.points,
                 choicesJson = null,
                 cachedAt = 0L
             )

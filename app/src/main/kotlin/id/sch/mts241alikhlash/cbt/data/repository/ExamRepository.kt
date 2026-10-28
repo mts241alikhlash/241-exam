@@ -171,6 +171,7 @@ private fun PaperQuestionDto.toEntity(sessionId: String, cachedAt: Long) = Cache
     number = number,
     type = type,
     bodyHtml = bodyHtml,
+    points = points,
     choicesJson = choices?.let {
         ExamRepository.json.encodeToString(ListSerializer(PaperChoiceDto.serializer()), it)
     },
@@ -182,7 +183,7 @@ private fun CachedQuestionEntity.toDto() = PaperQuestionDto(
     number = number,
     type = type,
     bodyHtml = bodyHtml,
-    points = 0.0,
+    points = points,
     choices = choicesJson?.let { encoded ->
         runCatching {
             ExamRepository.json.decodeFromString(ListSerializer(PaperChoiceDto.serializer()), encoded)

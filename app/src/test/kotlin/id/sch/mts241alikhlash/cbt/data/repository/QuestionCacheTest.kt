@@ -233,6 +233,18 @@ class QuestionCacheTest {
 
         assertNotNull("cancellation during cache write must propagate", caught)
     }
+
+    @Test
+    fun cached_question_keeps_its_points_and_choice_keys() = runTest {
+        val dao = FakeQuestionDao()
+        val question = dto("q1").copy(points = 2.5, choices = choices("x", "y"))
+        val repo = ExamRepository(FakeApi(questions = listOf(question)), FakeAnswerDao(), dao)
+
+        repo.getQuestions("s1")
+        val offline = ExamRepository(FakeApi(failure = IOException("offline")), FakeAnswerDao(), dao)
+
+        assertEquals(listOf(question), offline.getQuestions("s1", forceRefresh = true).getOrThrow())
+    }
 }
 
 private fun cached(
@@ -245,6 +257,7 @@ private fun cached(
     number = 1,
     type = "multiple_choice",
     bodyHtml = "<p>Soal $id</p>",
+    points = 1.0,
     choicesJson = null,
     cachedAt = cachedAt
 )
