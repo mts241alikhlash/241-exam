@@ -92,4 +92,19 @@ class ExamTimerTest {
 
         assertTrue(ExamTimer.isResumed(deadline, justPastTolerance))
     }
+
+    @Test
+    fun `explicit not-restored flag wins over the 90 minute heuristic`() {
+        val start = 1_700_000_000_000L
+        val shortDeadline = start + 60L * 60L * 1000L
+
+        assertFalse(ExamTimer.isResumed(shortDeadline, start, restored = false))
+    }
+
+    @Test
+    fun `explicit restored flag reports resumed`() {
+        val start = 1_700_000_000_000L
+
+        assertTrue(ExamTimer.isResumed(ExamTimer.deadlineFrom(start), start, restored = true))
+    }
 }

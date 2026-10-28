@@ -15,6 +15,9 @@ import kotlin.coroutines.cancellation.CancellationException
 
 data class SyncReport(val synced: Int, val failed: Int)
 
+fun answerClientId(sessionId: String, questionId: String, answer: String, updatedAt: Long): String =
+    java.util.UUID.nameUUIDFromBytes("$sessionId|$questionId|$updatedAt|$answer".toByteArray()).toString()
+
 class ExamRepository(
     private val api: ExamApiService,
     private val dao: AnswerDao,
@@ -94,7 +97,7 @@ class ExamRepository(
         dao.saveAnswer(entity)
 
         runCatching {
-            api.saveAnswer(sessionId, SubmitAnswerRequest(questionId, answer))
+            api.saveAnswer(sessionId, SubmitAnswerRequest(questionId, answer, answerClientId(sessionId, questionId, answer, entity.updatedAt)))
         }.onSuccess {
             // Only this exact revision may be marked: a newer edit made while the
             // request was in flight must stay pending.
@@ -114,7 +117,11 @@ class ExamRepository(
         var synced = 0
         for (item in pending) {
             try {
-                api.saveAnswer(sessionId, SubmitAnswerRequest(item.questionId, item.answer))
+                api.saveAnswer(sessionId, SubmitAnswerRequest(
+                        item.questionId,
+                        item.answer,
+                        answerClientId(item.sessionId, item.questionId, item.answer, item.updatedAt)
+                    ))
                 val marked = dao.markSynced(
                     sessionId = item.sessionId,
                     questionId = item.questionId,
