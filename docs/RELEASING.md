@@ -14,7 +14,9 @@ naming every required input instead of silently producing an unsigned APK.
 | `KEY_ALIAS`           | `KEY_ALIAS`          | Key alias inside the keystore            |
 | `KEY_PASSWORD`        | `KEY_PASSWORD`       | Password for that key                    |
 
-All four are required. The build checks them at configuration time and stops with:
+All four are required. The build validates them before any task runs — at configuration
+time when a packaging task was named literally, and against the resolved task graph
+otherwise — and stops with:
 
 ```
 Release build needs -PRELEASE_STORE_FILE, -PKEYSTORE_PASSWORD, -PKEY_ALIAS, -PKEY_PASSWORD (or the same names as environment variables). Missing: RELEASE_STORE_FILE, KEYSTORE_PASSWORD, KEY_ALIAS, KEY_PASSWORD. See docs/RELEASING.md.
@@ -24,6 +26,15 @@ The `Missing:` list reflects what is actually absent, so a partial set only name
 unset values. If `RELEASE_STORE_FILE` points at a path that does not exist, the list
 shows `RELEASE_STORE_FILE (file not found: /path/to/keystore.jks)` instead of failing
 later with a generic packaging error.
+
+The check runs against the **resolved task graph**, so abbreviated invocations
+(`./gradlew aR`, `assembleRel`, or a bare `a`) that expand to a release packaging task
+fail exactly like the full name. It keys on the tasks that actually produce the
+artifact — `packageRelease`, `packageReleaseBundle`, `packageReleaseUniversalApk`,
+`signReleaseBundle` — so non-packaging release tasks such as
+`:app:packageReleaseResources`, `:app:bundleReleaseResources`,
+`:app:signingConfigWriterRelease` and `:app:testReleaseUnitTest` still run without
+credentials.
 
 ## Creating the keystore (once, kept offline)
 
@@ -117,9 +128,41 @@ You can also confirm Gradle picked up the signing config before packaging:
 ./gradlew :app:signingReport
 ```
 
-The `release` variant should list your keystore and alias (passwords are never
-printed). Then verify the APK signature with `apksigner verify --print-certs` as
-shown above and confirm the certificate fingerprint matches the expected release key.
+`signingReport` is a **report**, not a gate: it exits 0 even when no credentials were
+read. Read the `Variant: release` block, not the exit code. With the four inputs set it
+must look like this (fingerprints abbreviated; passwords are never printed):
+
+```
+Variant: release
+Config: release
+Store: /home/you/keys/exam-cbt-release.jks
+Alias: exam-cbt
+MD5: 48:14:1C:7F:…
+SHA1: 33:3D:5D:59:…
+SHA-256: 4B:69:D8:F5:…
+Valid until: Friday, October 30, 2026
+----------
+```
+
+Without credentials the same block reads:
+
+```
+Variant: release
+Config: null
+Store: null
+Alias: null
+----------
+```
+
+**`Config: null` means the release build type has no signing config**, i.e. the
+credentials were not read — the APK would be unsigned. A non-null `Config` is not
+sufficient on its own either: `Store` and `Alias` must both be non-null, and the block
+must show certificate digests rather than an `Error: Failed to read key …` line (that
+line means the store or key password is wrong, and `signingReport` still exits 0).
+
+So the check is: `Config: release`, non-null `Store` and `Alias`, and a digest present.
+Then verify the APK signature with `apksigner verify --print-certs` as shown above and
+confirm the certificate fingerprint matches the expected release key.
 
 ## Never commit the keystore
 

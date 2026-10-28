@@ -43,15 +43,43 @@ val missingReleaseSigningInputs: List<String> = releaseSigningProperties.mapNotN
 }
 val hasCompleteReleaseSigning = missingReleaseSigningInputs.isEmpty()
 
-// Packaging tasks that would emit a release APK/AAB. Unit-test tasks such as
-// `testReleaseUnitTest` are intentionally excluded: they must run without credentials.
+// The tasks that actually emit or sign a release artifact. Only these need
+// credentials: `packageReleaseResources`, `bundleReleaseResources`,
+// `signingConfigWriterRelease`, `bundleReleaseClassesToCompileJar` and every
+// `*Test` task must run without them.
+val releaseArtifactTaskNames = setOf(
+    "packageRelease",
+    "packageReleaseBundle",
+    "packageReleaseUniversalApk",
+    "signReleaseBundle",
+)
+
+// Fail fast when the *literal* packaging task was requested. This cannot be the only
+// guard: Gradle accepts task-name abbreviations (`aR`, `assembleRel`, bare `a`), which
+// never match here. The resolved task graph is validated below, after configuration.
 val releasePackagingRequested = gradle.startParameter.taskNames.any { requested ->
-    val task = requested.substringAfterLast(':')
-    val isPackagingPrefix = listOf(
-        "assemble", "bundle", "package", "install", "sign", "publish",
-    ).any { task.startsWith(it) }
-    task == "build" || task == "assemble" || task == "bundle" ||
-        (isPackagingPrefix && task.contains("Release") && !task.contains("Test"))
+    requested.substringAfterLast(':') in releaseArtifactTaskNames ||
+        requested.substringAfterLast(':') in setOf(
+            "assembleRelease", "bundleRelease", "installRelease", "publishReleaseBundle",
+        )
+}
+
+val releaseSigningErrorMessage =
+    "Release build needs -PRELEASE_STORE_FILE, -PKEYSTORE_PASSWORD, -PKEY_ALIAS, " +
+        "-PKEY_PASSWORD (or the same names as environment variables). " +
+        "Missing: ${missingReleaseSigningInputs.joinToString(", ")}. " +
+        "See docs/RELEASING.md."
+
+// Authoritative guard: inspect the *resolved* graph so abbreviations and any future
+// alias that reaches a packaging task cannot ship an unsigned APK. Keyed on the tasks
+// that produce the artifact, so non-packaging release tasks stay credential-free.
+gradle.taskGraph.whenReady {
+    val packagesRelease = allTasks.any { task ->
+        task.project == project && task.name in releaseArtifactTaskNames
+    }
+    if (packagesRelease && !hasCompleteReleaseSigning) {
+        throw GradleException(releaseSigningErrorMessage)
+    }
 }
 
 android {
@@ -109,13 +137,7 @@ android {
             if (hasCompleteReleaseSigning) {
                 signingConfig = signingConfigs.findByName("release")
             } else if (releasePackagingRequested) {
-                throw GradleException(
-                    "Release build needs -PRELEASE_STORE_FILE, -PKEYSTORE_PASSWORD, " +
-                        "-PKEY_ALIAS, -PKEY_PASSWORD " +
-                        "(or the same names as environment variables). " +
-                        "Missing: ${missingReleaseSigningInputs.joinToString(", ")}. " +
-                        "See docs/RELEASING.md."
-                )
+                throw GradleException(releaseSigningErrorMessage)
             }
         }
     }

@@ -141,11 +141,11 @@ buildTypes.release {
 }
 ```
 
-Plus a `require` inside the release block when `gradle.startParameter.taskNames.any { it.contains("Release") }` and `!hasSigning`, with the message: `Release build needs -PRELEASE_STORE_FILE, -PKEYSTORE_PASSWORD, -PKEY_ALIAS, -PKEY_PASSWORD`.
+Plus a guard that inspects the **resolved** task graph (`gradle.taskGraph.whenReady`) for the tasks that actually emit a release artifact (`packageRelease`, `packageReleaseBundle`, `packageReleaseUniversalApk`, `signReleaseBundle`) and throws when signing is incomplete, with the message: `Release build needs -PRELEASE_STORE_FILE, -PKEYSTORE_PASSWORD, -PKEY_ALIAS, -PKEY_PASSWORD`. Do not key the guard on `gradle.startParameter.taskNames`: Gradle accepts abbreviations (`aR`, `assembleRel`, bare `a`), so a raw-name check misses them and ships an unsigned APK.
 
 - [ ] **Step 3: Verify both paths**
 
-Without credentials: `./gradlew :app:assembleRelease` → FAIL with that message. With dummy keystore: `keytool -genkeypair` into `/tmp`, then `./gradlew :app:assembleRelease -PRELEASE_STORE_FILE=/tmp/test.jks -PKEYSTORE_PASSWORD=test123 -PKEY_ALIAS=test -PKEY_PASSWORD=test123` → SUCCESS and `apksigner verify --print-certs` shows the cert.
+Without credentials: `./gradlew :app:assembleRelease` → FAIL with that message. With a throwaway keystore: `keytool -genkeypair` into `/tmp`, then `./gradlew :app:assembleRelease -PRELEASE_STORE_FILE=/tmp/test.jks -PKEYSTORE_PASSWORD='…' -PKEY_ALIAS=test -PKEY_PASSWORD='…'` → SUCCESS and `apksigner verify --print-certs` shows the cert. Never paste a real or reusable password into a command line or a document; generate a random throwaway one and delete the keystore afterwards.
 
 - [ ] **Step 4: Document**
 
