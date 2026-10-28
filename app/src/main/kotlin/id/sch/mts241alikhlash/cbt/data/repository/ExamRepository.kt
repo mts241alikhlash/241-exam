@@ -29,6 +29,7 @@ data class SyncReport(
 sealed interface SendOutcome {
     data object Sent : SendOutcome
     data object Retry : SendOutcome
+    data object Offline : SendOutcome
     data object Superseded : SendOutcome
     data class Closed(val message: String) : SendOutcome
     data class Rejected(val message: String) : SendOutcome
@@ -175,6 +176,7 @@ class ExamRepository(
                         break@loop
                     }
                     is SendOutcome.Rejected -> rejected++
+                    SendOutcome.Offline -> break@loop
                     SendOutcome.Retry, SendOutcome.Superseded -> Unit
                 }
             }
@@ -226,6 +228,10 @@ class ExamRepository(
             when (error.statusCode) {
                 409 -> SendOutcome.Closed(error.message)
                 400 -> SendOutcome.Rejected(error.message)
+                0 -> {
+                    log("Failed to sync answer ${item.questionId}", error)
+                    SendOutcome.Offline
+                }
                 else -> {
                     log("Failed to sync answer ${item.questionId}", error)
                     SendOutcome.Retry

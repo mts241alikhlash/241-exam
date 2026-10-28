@@ -117,6 +117,30 @@ class AnswerOrderingTest {
     }
 
     @Test
+    fun `a network failure stops the pass at the first row`() = runTest {
+        val dao = OrderDao(ans("q1"), ans("q2"), ans("q3"))
+        val offline = IOException("offline")
+        val api = OrderApi(errors = mapOf("q1" to offline, "q2" to offline, "q3" to offline))
+
+        val report = ExamRepository(api, dao, OrderQuestionDao()).syncPending("s1")
+
+        assertEquals(1, api.seen.size)
+        assertEquals(3, report.failed)
+    }
+
+    @Test
+    fun `a server error on one row does not stop the pass`() = runTest {
+        val dao = OrderDao(ans("q1"), ans("q2"))
+        val api = OrderApi(errors = mapOf("q1" to http(500, "Terjadi kesalahan")))
+
+        val report = ExamRepository(api, dao, OrderQuestionDao()).syncPending("s1")
+
+        assertEquals(listOf("q1", "q2"), api.seen.map { it.questionId })
+        assertEquals(1, report.synced)
+        assertEquals(1, report.failed)
+    }
+
+    @Test
     fun `a network failure leaves the row for the next pass`() = runTest {
         val dao = OrderDao(ans("q1"))
         val api = OrderApi(errors = mapOf("q1" to IOException("offline")))
