@@ -216,4 +216,5 @@ dependencies {
     testImplementation(libs.androidx.room.testing)
     testImplementation(libs.androidx.test.core)
     testImplementation(libs.robolectric)
+    testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
 }
