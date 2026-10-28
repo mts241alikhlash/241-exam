@@ -14,7 +14,7 @@ fun ackFor(request: SaveAnswerRequest) = SavedAnswerAckDto(
     updatedAt = "2026-10-27T00:00:00Z"
 )
 
-class InMemoryAnswerDao(vararg initial: id.sch.mts241alikhlash.cbt.data.local.CachedAnswerEntity) :
+open class InMemoryAnswerDao(vararg initial: id.sch.mts241alikhlash.cbt.data.local.CachedAnswerEntity) :
     id.sch.mts241alikhlash.cbt.data.local.AnswerDao {
     val rows = initial.associateBy { it.questionId }.toMutableMap()
 

@@ -179,4 +179,45 @@ class ExamAnswerInputTest {
         assertTrue(api.sent.isEmpty())
         assertTrue("q1" in vm.uiState.value.doubtfuls)
     }
+
+    @Test
+    fun `a doubt mark followed at once by a choice keeps the mark`() = runTest {
+        val dao = StaleDao()
+        val vm = ExamViewModel(
+            repository = ExamRepository(RecordingApi(), dao, EmptyQuestionDao(), now = { testScheduler.currentTime }),
+            sessionId = "s1",
+            deadline = 60 * 60 * 1000L,
+            now = { testScheduler.currentTime }
+        )
+        runCurrent()
+
+        vm.toggleDoubtful("q1")
+        vm.selectAnswer("q1", AnswerPayload.Choice("A"))
+        runCurrent()
+
+        assertTrue(dao.rows.getValue("q1").isDoubtful)
+    }
+
+    @Test
+    fun `two quick doubt toggles end with the mark off`() = runTest {
+        val dao = StaleDao()
+        val vm = ExamViewModel(
+            repository = ExamRepository(RecordingApi(), dao, EmptyQuestionDao(), now = { testScheduler.currentTime }),
+            sessionId = "s1",
+            deadline = 60 * 60 * 1000L,
+            now = { testScheduler.currentTime }
+        )
+        runCurrent()
+
+        vm.toggleDoubtful("q1")
+        vm.toggleDoubtful("q1")
+        runCurrent()
+
+        assertTrue(!dao.rows.getValue("q1").isDoubtful)
+    }
+}
+
+private class StaleDao : InMemoryAnswerDao() {
+    override fun observeAnswers(sessionId: String): kotlinx.coroutines.flow.Flow<List<id.sch.mts241alikhlash.cbt.data.local.CachedAnswerEntity>> =
+        kotlinx.coroutines.flow.flowOf(emptyList())
 }

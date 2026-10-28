@@ -146,7 +146,11 @@ class ExamViewModel(
     }
 
     private val optimistic = mutableMapOf<String, AnswerPayload>()
+    private val optimisticDoubt = mutableMapOf<String, Boolean>()
     private val textJobs = mutableMapOf<String, Job>()
+
+    private fun isDoubtful(questionId: String): Boolean =
+        optimisticDoubt[questionId] ?: _uiState.value.doubtfuls.contains(questionId)
 
     private fun currentAnswer(questionId: String): AnswerPayload? =
         optimistic[questionId] ?: _uiState.value.answers[questionId]
@@ -154,7 +158,7 @@ class ExamViewModel(
     fun selectAnswer(questionId: String, answer: AnswerPayload) {
         if (!_uiState.value.canAnswer) return
         optimistic[questionId] = answer
-        val currentDoubt = _uiState.value.doubtfuls.contains(questionId)
+        val currentDoubt = isDoubtful(questionId)
         viewModelScope.launch {
             handle(repository.recordAnswer(questionId, sessionId, answer.encode(), currentDoubt))
         }
@@ -191,7 +195,7 @@ class ExamViewModel(
         val text = _uiState.value.drafts[questionId] ?: return
         val payload = AnswerPayload.Text(text)
         optimistic[questionId] = payload
-        val doubt = _uiState.value.doubtfuls.contains(questionId)
+        val doubt = isDoubtful(questionId)
         handle(repository.recordAnswer(questionId, sessionId, payload.encode(), doubt))
         if (_uiState.value.drafts[questionId] == text) {
             _uiState.value = _uiState.value.copy(drafts = _uiState.value.drafts - questionId)
@@ -208,7 +212,8 @@ class ExamViewModel(
     fun toggleDoubtful(questionId: String) {
         if (!_uiState.value.canAnswer) return
         val currentAnswer = currentAnswer(questionId)?.encode() ?: ""
-        val newDoubt = !_uiState.value.doubtfuls.contains(questionId)
+        val newDoubt = !isDoubtful(questionId)
+        optimisticDoubt[questionId] = newDoubt
         viewModelScope.launch {
             handle(repository.recordAnswer(questionId, sessionId, currentAnswer, newDoubt))
         }
