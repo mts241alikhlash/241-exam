@@ -104,12 +104,17 @@ class ExamDatabaseMigrationTest {
     }
 
     @Test
-    fun `migration 2 to 3 clears the old caches and adds the points column`() {
+    fun `migration 2 to 3 keeps unsynced answers, clears the rest and adds the points column`() {
         helper.createDatabase(TEST_DB, 2).apply {
             execSQL(
                 "INSERT INTO cached_answers " +
                     "(questionId, sessionId, answer, isDoubtful, isSynced, updatedAt) " +
                     "VALUES ('q1', 's1', 'A', 0, 0, 0)"
+            )
+            execSQL(
+                "INSERT INTO cached_answers " +
+                    "(questionId, sessionId, answer, isDoubtful, isSynced, updatedAt) " +
+                    "VALUES ('q2', 's1', 'B', 0, 1, 0)"
             )
             execSQL(
                 "INSERT INTO cached_questions " +
@@ -121,9 +126,10 @@ class ExamDatabaseMigrationTest {
 
         val db = helper.runMigrationsAndValidate(TEST_DB, 3, true, ExamDatabase.MIGRATION_2_3)
 
-        db.query("SELECT COUNT(*) FROM cached_answers").use { cursor ->
-            cursor.moveToFirst()
-            assertEquals(0, cursor.getInt(0))
+        db.query("SELECT questionId FROM cached_answers").use { cursor ->
+            assertTrue(cursor.moveToFirst())
+            assertEquals("q1", cursor.getString(0))
+            assertEquals(false, cursor.moveToNext())
         }
         db.query("SELECT COUNT(*) FROM cached_questions").use { cursor ->
             cursor.moveToFirst()

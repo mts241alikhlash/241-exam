@@ -38,7 +38,7 @@ abstract class ExamDatabase : RoomDatabase() {
 
         val MIGRATION_2_3 = object : Migration(2, 3) {
             override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL("DELETE FROM `cached_answers`")
+                db.execSQL("DELETE FROM `cached_answers` WHERE `isSynced` = 1")
                 db.execSQL("DROP TABLE `cached_questions`")
                 db.execSQL(
                     """
