@@ -47,7 +47,7 @@ class ExamListViewModel(private val catalog: ExamCatalogRepository) : ViewModel(
     }
 }
 
-fun examStatusLabel(status: String, startsAt: String, zone: java.time.ZoneId = java.time.ZoneId.systemDefault()): String =
+fun examStatusLabel(status: String, startsAt: String, zone: java.util.TimeZone = java.util.TimeZone.getDefault()): String =
     when (status) {
         "OPEN" -> "Dibuka · Mulai"
         "IN_PROGRESS" -> "Sedang berlangsung · Lanjutkan"
@@ -56,9 +56,11 @@ fun examStatusLabel(status: String, startsAt: String, zone: java.time.ZoneId = j
         else -> status
     }
 
-private fun openingTime(startsAt: String, zone: java.time.ZoneId): String? =
+private fun openingTime(startsAt: String, zone: java.util.TimeZone): String? =
     runCatching {
-        java.time.OffsetDateTime.parse(startsAt)
-            .atZoneSameInstant(zone)
-            .format(java.time.format.DateTimeFormatter.ofPattern("EEE, d MMM yyyy HH.mm", java.util.Locale.forLanguageTag("id-ID")))
+        val parsed = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSX", java.util.Locale.ROOT).parse(startsAt)
+            ?: return null
+        java.text.SimpleDateFormat("EEE, d MMM yyyy HH.mm", java.util.Locale.forLanguageTag("id-ID"))
+            .apply { timeZone = zone }
+            .format(parsed)
     }.getOrNull()

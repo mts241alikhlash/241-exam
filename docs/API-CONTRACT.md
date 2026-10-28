@@ -1,7 +1,7 @@
 # Kontrak API yang diminta klien Android
 
-Dokumen ini adalah permintaan klien. Backend (identity-service dan exam-service) belum
-memilikinya; sepakati dengan tim sebelum diimplementasikan.
+Bagian Autentikasi adalah permintaan klien: identity-service belum memilikinya, sepakati dengan
+tim sebelum diimplementasikan. Bagian Ujian sudah ada di exam-service dan mengikuti OpenAPI-nya.
 
 ## Envelope
 
@@ -12,7 +12,7 @@ Semua respons dibungkus `ResponseInterceptor`:
 ```
 
 Error: `{ "statusCode": 401, "message": "Kredensial salah", "data": null }`.
-Semua field JSON memakai snake_case.
+Field autentikasi memakai snake_case; field ujian memakai camelCase (lihat bagian Ujian).
 
 ## Autentikasi (identity-service)
 

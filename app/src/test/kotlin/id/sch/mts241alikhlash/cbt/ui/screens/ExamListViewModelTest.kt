@@ -75,7 +75,7 @@ class ExamListViewModelTest {
 }
 
 class ExamStatusLabelTest {
-    private val zone = java.time.ZoneId.of("Asia/Jakarta")
+    private val zone = java.util.TimeZone.getTimeZone("Asia/Jakarta")
 
     @org.junit.Test
     fun upcoming_shows_the_local_opening_time() {
