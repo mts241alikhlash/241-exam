@@ -13,7 +13,9 @@ import androidx.lifecycle.lifecycleScope
 import id.sch.mts241alikhlash.cbt.data.session.RestoreOutcome
 import id.sch.mts241alikhlash.cbt.kiosk.ExamDeviceAdminReceiver
 import id.sch.mts241alikhlash.cbt.kiosk.KioskPolicy
+import id.sch.mts241alikhlash.cbt.kiosk.ViolationStore
 import id.sch.mts241alikhlash.cbt.ui.KioskWarningOverlay
+import id.sch.mts241alikhlash.cbt.ui.SupervisorExitDialog
 import id.sch.mts241alikhlash.cbt.data.session.endExamSession
 import id.sch.mts241alikhlash.cbt.data.session.restoreExamSession
 import id.sch.mts241alikhlash.cbt.ui.AppRootState
@@ -24,8 +26,9 @@ import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
 
-    private var cheatWarningCount = 0
+    private lateinit var violations: ViolationStore
     private var isExamActive = false
+    private var showSupervisorExit by mutableStateOf(false)
 
     /** True when the OS confirms the task is actually pinned; gates the exam UI. */
     private val isPinned = mutableStateOf(false)
@@ -55,6 +58,7 @@ class MainActivity : ComponentActivity() {
         )
 
         val app = application as CBTApplication
+        violations = ViolationStore(this)
 
         setContent {
             var appState by remember { mutableStateOf(AppRootState()) }
@@ -132,7 +136,8 @@ class MainActivity : ComponentActivity() {
                             onRetry = {
                                 runCatching { startLockTask() }
                                 verifyPinState()
-                            }
+                            },
+                            onSupervisorAccess = { showSupervisorExit = true }
                         )
                         return@AssessmentAppRoot
                     }
@@ -177,7 +182,33 @@ class MainActivity : ComponentActivity() {
                     )
                 }
             )
+
+            if (showSupervisorExit) {
+                SupervisorExitDialog(
+                    expectedPin = BuildConfig.SUPERVISOR_PIN,
+                    onDismiss = { showSupervisorExit = false },
+                    onConfirm = {
+                        showSupervisorExit = false
+                        emergencyExit()
+                    }
+                )
+            }
         }
+    }
+
+    /**
+     * Supervisor escape hatch: drop the kiosk and leave the exam shell so a broken
+     * device can be recovered. Answers already saved stay on disk.
+     */
+    private fun emergencyExit() {
+        isExamActive = false
+        mainHandler.removeCallbacks(pinWatch)
+        mainHandler.removeCallbacks(pinRecheck)
+        runCatching { stopLockTask() }
+        clearDeviceOwnerPolicies()
+        applyExamWindowFlags()
+        violations.record("supervisor_exit")
+        finishAndRemoveTask()
     }
 
     override fun onPause() {
@@ -186,10 +217,10 @@ class MainActivity : ComponentActivity() {
         val power = getSystemService(android.os.PowerManager::class.java)
         val interactive = power?.isInteractive ?: true
         if (isExamActive && interactive) {
-            cheatWarningCount++
+            val total = violations.record("left_app")
             Toast.makeText(
                 this,
-                "Peringatan: Dilarang keluar dari aplikasi ujian! ($cheatWarningCount)",
+                "Peringatan: Dilarang keluar dari aplikasi ujian! ($total)",
                 Toast.LENGTH_SHORT
             ).show()
         }
@@ -292,6 +323,9 @@ class MainActivity : ComponentActivity() {
         val secure = KioskPolicy.isSecure(state)
         if (secure != isPinned.value) {
             android.util.Log.i("MainActivity", "Pin state changed: secure=$secure (state=$state)")
+            // Losing the pin during an exam is an integrity event: the student either
+            // rejected the dialog or used the system escape gesture.
+            if (!secure && isExamActive) violations.record("pin_lost")
         }
         isPinned.value = secure
     }

@@ -1,6 +1,8 @@
 package id.sch.mts241alikhlash.cbt.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -26,7 +28,10 @@ import id.sch.mts241alikhlash.cbt.ui.theme.TextPrimary
 
 /** Covers the exam when the OS reports the device is not pinned. */
 @Composable
-fun KioskWarningOverlay(onRetry: () -> Unit) {
+fun KioskWarningOverlay(
+    onRetry: () -> Unit,
+    onSupervisorAccess: () -> Unit = {}
+) {
     val family: androidx.compose.ui.text.font.FontFamily = DMSansFontFamily
     Surface(modifier = Modifier.fillMaxSize(), color = BrandSurface) {
         Column(
@@ -43,7 +48,10 @@ fun KioskWarningOverlay(onRetry: () -> Unit) {
                 fontWeight = FontWeight.Bold,
                 fontSize = 20.sp,
                 color = StatusError,
-                textAlign = TextAlign.Center
+                textAlign = TextAlign.Center,
+                modifier = Modifier.pointerInput(Unit) {
+                    detectTapGestures(onLongPress = { onSupervisorAccess() })
+                }
             )
             Text(
                 text = "Ujian dijeda karena kunci layar ditolak. Panggil pengawas, lalu kunci kembali perangkat untuk melanjutkan.",
