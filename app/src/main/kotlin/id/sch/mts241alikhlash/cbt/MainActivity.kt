@@ -88,7 +88,10 @@ class MainActivity : ComponentActivity() {
                         sessionRepository = app.sessionRepository,
                         scope = lifecycleScope,
                         syncPending = app.repository::syncPending,
-                        validate = { id -> app.repository.pullServerAnswers(id) }
+                        validate = { id ->
+                            app.examActive = true
+                            app.repository.pullServerAnswers(id)
+                        }
                     ) { result ->
                         result.exceptionOrNull()?.let {
                             // Startup sync is best effort: report, never block the exam.
@@ -109,6 +112,7 @@ class MainActivity : ComponentActivity() {
                     }
 
                     is RestoreOutcome.SessionLost -> {
+                        app.examActive = false
                         val storedUser = runCatching { app.authRepository.currentStudent() }.getOrNull()
                         appState = AppRootState(
                             restoreComplete = true,
@@ -149,7 +153,10 @@ class MainActivity : ComponentActivity() {
                                     app.sessionRepository,
                                     exam.id,
                                     accessCode,
-                                    pullAnswers = { id -> app.repository.pullServerAnswers(id) }
+                                    pullAnswers = { id ->
+                                        app.examActive = true
+                                        app.repository.pullServerAnswers(id)
+                                    }
                                 )
                             }
                             val failure = started.exceptionOrNull()
