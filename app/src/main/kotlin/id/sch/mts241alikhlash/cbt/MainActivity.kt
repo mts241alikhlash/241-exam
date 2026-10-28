@@ -33,6 +33,19 @@ class MainActivity : ComponentActivity() {
     private val mainHandler = android.os.Handler(android.os.Looper.getMainLooper())
     private val pinRecheck = Runnable { verifyPinState() }
 
+    /**
+     * The OS offers no public callback when lock-task mode ends (the listener is
+     * @SystemApi), and a student can drop the pin while the app stays foreground.
+     * Sample while an exam runs so the gate closes immediately.
+     */
+    private val pinWatch = object : Runnable {
+        override fun run() {
+            if (!isExamActive) return
+            verifyPinState()
+            mainHandler.postDelayed(this, 1000)
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -169,7 +182,10 @@ class MainActivity : ComponentActivity() {
 
     override fun onPause() {
         super.onPause()
-        if (isExamActive) {
+        // Turning the screen off is not leaving the app; only count real exits.
+        val power = getSystemService(android.os.PowerManager::class.java)
+        val interactive = power?.isInteractive ?: true
+        if (isExamActive && interactive) {
             cheatWarningCount++
             Toast.makeText(
                 this,
@@ -196,6 +212,8 @@ class MainActivity : ComponentActivity() {
     private fun startKioskMode() {
         applyExamWindowFlags()
         isPinned.value = false
+        mainHandler.removeCallbacks(pinWatch)
+        mainHandler.post(pinWatch)
         runCatching {
             // With Device Owner the system pins silently and blocks the escape
             // gesture; without it Android always shows a dismissible dialog.
@@ -234,6 +252,7 @@ class MainActivity : ComponentActivity() {
         isExamActive = false
         isPinned.value = false
         mainHandler.removeCallbacks(pinRecheck)
+        mainHandler.removeCallbacks(pinWatch)
         clearDeviceOwnerPolicies()
         applyExamWindowFlags()
         runCatching {
@@ -270,9 +289,10 @@ class MainActivity : ComponentActivity() {
     private fun verifyPinState() {
         val am = getSystemService(ActivityManager::class.java)
         val state = am?.lockTaskModeState ?: ActivityManager.LOCK_TASK_MODE_NONE
-        isPinned.value = KioskPolicy.isSecure(state)
-        if (!isPinned.value) {
-            android.util.Log.w("MainActivity", "Exam running without pin; state=$state")
+        val secure = KioskPolicy.isSecure(state)
+        if (secure != isPinned.value) {
+            android.util.Log.i("MainActivity", "Pin state changed: secure=$secure (state=$state)")
         }
+        isPinned.value = secure
     }
 }
