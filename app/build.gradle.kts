@@ -115,6 +115,11 @@ android {
 
     buildTypes {
         debug {
+            buildConfigField(
+                "String",
+                "SUPERVISOR_PIN",
+                "\"" + (providers.gradleProperty("SUPERVISOR_PIN").orElse("246810").get()) + "\""
+            )
             val debugUrl = providers.gradleProperty("API_BASE_URL_DEBUG")
                 .orElse(providers.gradleProperty("API_BASE_URL"))
                 .orElse("http://10.0.2.2:4100/")
@@ -123,6 +128,11 @@ android {
             buildConfigField("String", "BASE_URL", debugUrl.asBuildConfigString())
         }
         release {
+            buildConfigField(
+                "String",
+                "SUPERVISOR_PIN",
+                "\"" + (providers.gradleProperty("SUPERVISOR_PIN").orElse("246810").get()) + "\""
+            )
             val releaseUrl = providers.gradleProperty("API_BASE_URL")
                 .orElse("https://exam-api.invalid/")
                 .get()
