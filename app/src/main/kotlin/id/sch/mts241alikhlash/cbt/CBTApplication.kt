@@ -9,6 +9,7 @@ import id.sch.mts241alikhlash.cbt.data.auth.SupervisorVerifier
 import id.sch.mts241alikhlash.cbt.data.auth.TokenAuthenticator
 import id.sch.mts241alikhlash.cbt.data.auth.authLoggingInterceptor
 import id.sch.mts241alikhlash.cbt.data.local.ExamDatabase
+import id.sch.mts241alikhlash.cbt.data.remote.DeviceIdInterceptor
 import id.sch.mts241alikhlash.cbt.data.remote.EnvelopeConverterFactory
 import id.sch.mts241alikhlash.cbt.data.remote.ExamApiService
 import id.sch.mts241alikhlash.cbt.data.remote.ExamCatalogApiService
@@ -84,6 +85,7 @@ class CBTApplication : Application() {
         )
 
         val client = OkHttpClient.Builder()
+            .addInterceptor(DeviceIdInterceptor { deviceId() })
             .addInterceptor(AuthInterceptor(authRepository))
             .authenticator(TokenAuthenticator(authRepository) { examActive })
             .addInterceptor(logging)
