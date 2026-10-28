@@ -7,11 +7,13 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -47,9 +49,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import id.sch.mts241alikhlash.cbt.R
@@ -295,89 +299,103 @@ fun ExamContent(
                     color = BrandSurface,
                     border = androidx.compose.foundation.BorderStroke(1.dp, BorderSubtle)
                 ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 10.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        OutlinedButton(
-                            onClick = { onGoToIndex(state.currentIndex - 1) },
-                            enabled = state.currentIndex > 0 && !state.isSubmitting,
-                            shape = RoundedCornerShape(8.dp),
-                            modifier = Modifier.height(38.dp)
-                        ) {
-                            Text(
-                                text = "Sebelumnya",
-                                fontFamily = DMSansFontFamily,
-                                fontWeight = FontWeight.Medium,
-                                fontSize = 13.sp
-                            )
-                        }
-
-                        val currentQ = state.questions[state.currentIndex]
-                        val isDoubt = state.doubtfuls.contains(currentQ.id)
-
-                        OutlinedButton(
-                            onClick = { onToggleDoubtful(currentQ.id) },
-                            enabled = state.canAnswer,
-                            shape = RoundedCornerShape(8.dp),
-                            border = androidx.compose.foundation.BorderStroke(
-                                1.dp,
-                                if (isDoubt) DoubtfulOrange else BorderSubtle
-                            ),
-                            colors = ButtonDefaults.outlinedButtonColors(
-                                containerColor = if (isDoubt) DoubtfulOrangeLight else Color.Transparent
-                            ),
-                            modifier = Modifier.height(38.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Warning,
-                                contentDescription = null,
-                                tint = if (isDoubt) DoubtfulOrange else TextMuted,
-                                modifier = Modifier.size(14.dp)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                text = "Ragu-ragu",
-                                fontFamily = DMSansFontFamily,
-                                fontWeight = FontWeight.Medium,
-                                fontSize = 12.sp,
-                                color = if (isDoubt) DoubtfulOrange else TextSecondary
-                            )
-                        }
-
-                        if (state.currentIndex < state.questions.size - 1) {
-                            Button(
-                                onClick = { onGoToIndex(state.currentIndex + 1) },
-                                enabled = !state.isSubmitting,
-                                shape = RoundedCornerShape(8.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = BrandNavy),
-                                modifier = Modifier.height(38.dp)
-                            ) {
-                                Text(
-                                    text = "Selanjutnya",
-                                    fontFamily = DMSansFontFamily,
-                                    fontWeight = FontWeight.SemiBold,
-                                    fontSize = 13.sp
-                                )
-                            }
+                    val currentQ = state.questions[state.currentIndex]
+                    val isDoubt = state.doubtfuls.contains(currentQ.id)
+                    val isLastQuestion = state.currentIndex >= state.questions.size - 1
+                    val primaryLabel =
+                        if (isLastQuestion) {
+                            if (state.isSubmitting) "Mengirim…" else "Kumpulkan"
                         } else {
-                            Button(
-                                onClick = { showConfirmDialog = true },
-                                enabled = state.canSubmit,
-                                shape = RoundedCornerShape(8.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = StatusSuccess),
-                                modifier = Modifier.height(38.dp)
+                            "Selanjutnya"
+                        }
+                    val primaryEnabled = if (isLastQuestion) state.canSubmit else !state.isSubmitting
+                    val primaryColor = if (isLastQuestion) StatusSuccess else BrandNavy
+                    val onPrimaryClick: () -> Unit =
+                        if (isLastQuestion) {
+                            { showConfirmDialog = true }
+                        } else {
+                            { onGoToIndex(state.currentIndex + 1) }
+                        }
+
+                    // At accessibility font scales three labels cannot share one 320dp
+                    // row: "Selanjutnya" was cut mid-glyph because a single line with
+                    // softWrap=false defaults to Clip. Two rows keep every label whole,
+                    // which beats ellipsizing the primary verb ("Selanjut…") and beats
+                    // shrinking the text back below the user's chosen size.
+                    val useTwoRows = LocalDensity.current.fontScale > 1.2f
+
+                    if (useTwoRows) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 8.dp, vertical = 10.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Text(
-                                    text = if (state.isSubmitting) "Mengirim…" else "Kumpulkan",
-                                    fontFamily = DMSansFontFamily,
-                                    fontWeight = FontWeight.SemiBold,
-                                    fontSize = 13.sp
+                                ExamPreviousButton(
+                                    enabled = state.currentIndex > 0 && !state.isSubmitting,
+                                    onClick = { onGoToIndex(state.currentIndex - 1) },
+                                    // Let the buttons grow with the user's font size
+                                    // instead of pinning a height the text outgrows.
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .heightIn(min = 38.dp)
+                                )
+                                ExamDoubtButton(
+                                    isDoubt = isDoubt,
+                                    enabled = state.canAnswer,
+                                    onClick = { onToggleDoubtful(currentQ.id) },
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .heightIn(min = 38.dp)
                                 )
                             }
+                            ExamPrimaryAction(
+                                label = primaryLabel,
+                                enabled = primaryEnabled,
+                                containerColor = primaryColor,
+                                onClick = onPrimaryClick,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .heightIn(min = 38.dp)
+                            )
+                        }
+                    } else {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 8.dp, vertical = 10.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            ExamPreviousButton(
+                                enabled = state.currentIndex > 0 && !state.isSubmitting,
+                                onClick = { onGoToIndex(state.currentIndex - 1) },
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(38.dp)
+                            )
+                            ExamDoubtButton(
+                                isDoubt = isDoubt,
+                                enabled = state.canAnswer,
+                                onClick = { onToggleDoubtful(currentQ.id) },
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(38.dp)
+                            )
+                            ExamPrimaryAction(
+                                label = primaryLabel,
+                                enabled = primaryEnabled,
+                                containerColor = primaryColor,
+                                onClick = onPrimaryClick,
+                                modifier = Modifier
+                                    .weight(1.2f)
+                                    .height(38.dp)
+                            )
                         }
                     }
                 }
@@ -539,7 +557,7 @@ fun ExamContent(
                                         color = StatusSuccessLight
                                     ) {
                                         Text(
-                                            text = currentQ.type.replace("_", " ").uppercase(),
+                                            text = questionTypeLabel(currentQ.type),
                                             fontFamily = DMSansFontFamily,
                                             fontWeight = FontWeight.SemiBold,
                                             fontSize = 11.sp,
@@ -694,5 +712,114 @@ private fun ExamErrorContent(
                 )
             }
         }
+    }
+}
+
+/**
+ * Bottom-bar "previous question" action.
+ *
+ * The label is allowed to ellipsize: skipping back is recoverable and its meaning
+ * survives an abbreviation, unlike the primary action. The primary never uses this.
+ */
+@Composable
+private fun ExamPreviousButton(
+    enabled: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    OutlinedButton(
+        onClick = onClick,
+        enabled = enabled,
+        shape = RoundedCornerShape(8.dp),
+        contentPadding = PaddingValues(horizontal = 8.dp),
+        modifier = modifier
+    ) {
+        Text(
+            text = "Sebelumnya",
+            fontFamily = DMSansFontFamily,
+            fontWeight = FontWeight.Medium,
+            fontSize = 13.sp,
+            maxLines = 1,
+            softWrap = false,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
+/** Bottom-bar "mark doubtful" toggle; secondary, so it may ellipsize like [ExamPreviousButton]. */
+@Composable
+private fun ExamDoubtButton(
+    isDoubt: Boolean,
+    enabled: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    OutlinedButton(
+        onClick = onClick,
+        enabled = enabled,
+        shape = RoundedCornerShape(8.dp),
+        border = androidx.compose.foundation.BorderStroke(
+            1.dp,
+            if (isDoubt) DoubtfulOrange else BorderSubtle
+        ),
+        colors = ButtonDefaults.outlinedButtonColors(
+            containerColor = if (isDoubt) DoubtfulOrangeLight else Color.Transparent
+        ),
+        contentPadding = PaddingValues(horizontal = 8.dp),
+        modifier = modifier
+    ) {
+        Icon(
+            imageVector = Icons.Default.Warning,
+            contentDescription = null,
+            tint = if (isDoubt) DoubtfulOrange else TextMuted,
+            modifier = Modifier.size(14.dp)
+        )
+        Spacer(modifier = Modifier.width(6.dp))
+        Text(
+            text = "Ragu-ragu",
+            fontFamily = DMSansFontFamily,
+            fontWeight = FontWeight.Medium,
+            fontSize = 12.sp,
+            color = if (isDoubt) DoubtfulOrange else TextSecondary,
+            maxLines = 1,
+            softWrap = false,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
+/**
+ * The bottom bar's primary action ("Selanjutnya" / "Kumpulkan").
+ *
+ * It wraps instead of clipping: `softWrap = true` with `maxLines = 2` and an explicit
+ * [TextOverflow.Ellipsis] means a label that still does not fit is visibly truncated
+ * rather than silently cut mid-glyph. The two-row layout gives it a full-width row at
+ * large font scales, so in practice it renders whole.
+ */
+@Composable
+private fun ExamPrimaryAction(
+    label: String,
+    enabled: Boolean,
+    containerColor: Color,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Button(
+        onClick = onClick,
+        enabled = enabled,
+        shape = RoundedCornerShape(8.dp),
+        colors = ButtonDefaults.buttonColors(containerColor = containerColor),
+        contentPadding = PaddingValues(horizontal = 8.dp),
+        modifier = modifier
+    ) {
+        Text(
+            text = label,
+            fontFamily = DMSansFontFamily,
+            fontWeight = FontWeight.SemiBold,
+            fontSize = 13.sp,
+            maxLines = 2,
+            softWrap = true,
+            overflow = TextOverflow.Ellipsis
+        )
     }
 }

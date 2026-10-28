@@ -5,3 +5,8 @@ build/
 .idea/
 .DS_Store
 local.properties
+
+# Release signing material must never be committed. See docs/RELEASING.md.
+*.jks
+*.keystore
+keystore.properties

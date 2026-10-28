@@ -15,6 +15,73 @@ fun String.requireHttps(): String {
 }
 fun String.asBuildConfigString(): String = "\"" + replace("\\", "\\\\").replace("\"", "\\\"") + "\""
 
+// Release signing credentials are read from -P Gradle properties or the matching
+// environment variables. No keystore, alias, or password is ever stored in the repo.
+// See docs/RELEASING.md.
+val releaseSigningProperties = listOf(
+    "RELEASE_STORE_FILE",
+    "KEYSTORE_PASSWORD",
+    "KEY_ALIAS",
+    "KEY_PASSWORD",
+)
+val releaseSigningValues: Map<String, String?> = releaseSigningProperties.associateWith { name ->
+    providers.gradleProperty(name).orNull?.takeIf { it.isNotBlank() }
+        ?: providers.environmentVariable(name).orNull?.takeIf { it.isNotBlank() }
+}
+val releaseStoreFilePath = releaseSigningValues["RELEASE_STORE_FILE"]
+val releaseStoreFile = releaseStoreFilePath?.let { file(it) }
+val hasReleaseStoreFile = releaseStoreFile?.exists() == true
+
+// A typo'd RELEASE_STORE_FILE must fail here, not later with AGP's generic error.
+val missingReleaseSigningInputs: List<String> = releaseSigningProperties.mapNotNull { name ->
+    when {
+        releaseSigningValues[name] == null -> name
+        name == "RELEASE_STORE_FILE" && !hasReleaseStoreFile ->
+            "$name (file not found: $releaseStoreFilePath)"
+        else -> null
+    }
+}
+val hasCompleteReleaseSigning = missingReleaseSigningInputs.isEmpty()
+
+// The tasks that actually emit or sign a release artifact. Only these need
+// credentials: `packageReleaseResources`, `bundleReleaseResources`,
+// `signingConfigWriterRelease`, `bundleReleaseClassesToCompileJar` and every
+// `*Test` task must run without them.
+val releaseArtifactTaskNames = setOf(
+    "packageRelease",
+    "packageReleaseBundle",
+    "packageReleaseUniversalApk",
+    "signReleaseBundle",
+)
+
+// Fail fast when the *literal* packaging task was requested. This cannot be the only
+// guard: Gradle accepts task-name abbreviations (`aR`, `assembleRel`, bare `a`), which
+// never match here. The resolved task graph is validated below, after configuration.
+val releasePackagingRequested = gradle.startParameter.taskNames.any { requested ->
+    requested.substringAfterLast(':') in releaseArtifactTaskNames ||
+        requested.substringAfterLast(':') in setOf(
+            "assembleRelease", "bundleRelease", "installRelease", "publishReleaseBundle",
+        )
+}
+
+val releaseSigningErrorMessage =
+    "Release build needs -PRELEASE_STORE_FILE, -PKEYSTORE_PASSWORD, -PKEY_ALIAS, " +
+        "-PKEY_PASSWORD (or the same names as environment variables). " +
+        "Missing: ${missingReleaseSigningInputs.joinToString(", ")}. " +
+        "See docs/RELEASING.md."
+
+// Authoritative guard: inspect the *resolved* graph so abbreviations and any future
+// alias that reaches a packaging task cannot ship an unsigned APK. Keyed on the tasks
+// that produce the artifact, so non-packaging release tasks stay credential-free.
+gradle.taskGraph.whenReady {
+    val packagesRelease = allTasks.any { task ->
+        task.project == project && task.name in releaseArtifactTaskNames
+    }
+    if (packagesRelease && !hasCompleteReleaseSigning) {
+        throw GradleException(releaseSigningErrorMessage)
+    }
+}
+
 android {
     namespace = "id.sch.mts241alikhlash.cbt"
     compileSdk = 35
@@ -33,6 +100,17 @@ android {
             "http://10.0.2.2:4100/".asBuildConfigString(),
         )
 
+    }
+
+    signingConfigs {
+        if (hasReleaseStoreFile) {
+            create("release") {
+                storeFile = releaseStoreFile
+                storePassword = releaseSigningValues["KEYSTORE_PASSWORD"]
+                keyAlias = releaseSigningValues["KEY_ALIAS"]
+                keyPassword = releaseSigningValues["KEY_PASSWORD"]
+            }
+        }
     }
 
     buildTypes {
@@ -56,6 +134,11 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            if (hasCompleteReleaseSigning) {
+                signingConfig = signingConfigs.findByName("release")
+            } else if (releasePackagingRequested) {
+                throw GradleException(releaseSigningErrorMessage)
+            }
         }
     }
     compileOptions {
