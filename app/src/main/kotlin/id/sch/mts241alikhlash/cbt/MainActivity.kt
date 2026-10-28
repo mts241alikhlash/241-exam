@@ -224,7 +224,8 @@ class MainActivity : ComponentActivity() {
                             repository = app.repository,
                             sessionId = sessionId,
                             deadline = deadline,
-                            restored = sessionRestored
+                            restored = sessionRestored,
+                            onSubmitConfirmed = { id -> app.sessionRepository.finishIfCurrent(id) }
                         )
                     }
 

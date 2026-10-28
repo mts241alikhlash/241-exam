@@ -58,6 +58,21 @@ class ExamRestoreTest {
     }
 
     @Test
+    fun `an unknown session sends the student back like a released one`() = runTest {
+        val repo = SessionRepository(ClearableStore("s1", null))
+
+        val outcome = restoreExamSession(
+            sessionRepository = repo,
+            scope = this,
+            syncPending = { SyncReport(0, 0) },
+            validate = { throw ApiException(404, "Sesi ujian tidak ditemukan") }
+        )
+
+        assertEquals(RestoreOutcome.SessionLost("Sesi ujian tidak ditemukan"), outcome)
+        assertEquals(null, repo.current())
+    }
+
+    @Test
     fun `an offline check still restores the session`() = runTest {
         val repo = SessionRepository(StubStore("s1", 1_700_005_400_000L))
 

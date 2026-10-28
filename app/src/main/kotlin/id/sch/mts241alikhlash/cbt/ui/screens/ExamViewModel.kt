@@ -45,7 +45,8 @@ class ExamViewModel(
     private val sessionId: String,
     deadline: Long? = null,
     restored: Boolean? = null,
-    private val now: () -> Long = { System.currentTimeMillis() }
+    private val now: () -> Long = { System.currentTimeMillis() },
+    private val onSubmitConfirmed: suspend (String) -> Unit = {}
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(
@@ -249,6 +250,7 @@ class ExamViewModel(
                 false
             } else {
                 repository.submit(sessionId)
+                onSubmitConfirmed(sessionId)
                 _uiState.value = _uiState.value.copy(
                     isSubmitting = false,
                     isSubmitted = true,

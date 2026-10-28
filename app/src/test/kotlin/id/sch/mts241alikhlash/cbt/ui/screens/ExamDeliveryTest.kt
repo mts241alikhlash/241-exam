@@ -65,8 +65,14 @@ class ExamDeliveryTest {
         }
     }
 
-    private fun TestScope.newViewModel(api: Api, dao: InMemoryAnswerDao = InMemoryAnswerDao(), deadline: Long = 60 * 60 * 1000L) =
+    private fun TestScope.newViewModel(
+        api: Api,
+        dao: InMemoryAnswerDao = InMemoryAnswerDao(),
+        deadline: Long = 60 * 60 * 1000L,
+        confirmed: MutableList<String> = mutableListOf()
+    ) =
         ExamViewModel(
+            onSubmitConfirmed = { confirmed += it },
             repository = ExamRepository(api, dao, EmptyQuestionDao(), now = { testScheduler.currentTime }),
             sessionId = "s1",
             deadline = deadline,
@@ -149,5 +155,30 @@ class ExamDeliveryTest {
 
         assertEquals(released, vm.uiState.value.lostMessage)
         assertEquals(1, api.submitCalls)
+    }
+
+    @Test
+    fun `the local session is cleared as soon as the server confirms the submit`() = runTest {
+        val confirmed = mutableListOf<String>()
+        val vm = newViewModel(Api(), confirmed = confirmed)
+        runCurrent()
+
+        vm.submitExam()
+        runCurrent()
+
+        assertTrue(vm.uiState.value.isSubmitted)
+        assertEquals(listOf("s1"), confirmed)
+    }
+
+    @Test
+    fun `the local session stays when the submit fails`() = runTest {
+        val confirmed = mutableListOf<String>()
+        val vm = newViewModel(Api(submitError = java.io.IOException("offline")), confirmed = confirmed)
+        runCurrent()
+
+        vm.submitExam()
+        runCurrent()
+
+        assertTrue(confirmed.isEmpty())
     }
 }
