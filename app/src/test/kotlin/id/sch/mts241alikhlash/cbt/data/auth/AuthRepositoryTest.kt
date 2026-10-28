@@ -56,7 +56,7 @@ class FakeAuthApi : AuthApiService {
 
 fun authResponse(
     access: String = "access-1",
-    refresh: String = "refresh-1",
+    refresh: String? = "refresh-1",
     roles: List<String> = listOf("STUDENT")
 ) = AuthResponseDto(
     accessToken = access,
@@ -112,6 +112,27 @@ class AuthRepositoryTest {
         assertEquals("access-2", tokens?.accessToken)
         assertEquals("refresh-2", store.value!!.tokens.refreshToken)
         assertEquals("u1", store.value!!.user.id)
+    }
+
+    @Test
+    fun refresh_without_a_new_refresh_token_keeps_the_one_held() = runTest {
+        repo.login("ahmad", "secret", requiredRole = "STUDENT")
+        api.refreshResult = { authResponse(access = "access-2", refresh = null) }
+
+        val tokens = repo.refresh()
+
+        assertEquals("access-2", tokens?.accessToken)
+        assertEquals("refresh-1", store.value!!.tokens.refreshToken)
+    }
+
+    @Test
+    fun login_without_a_refresh_token_is_an_error_and_stores_nothing() = runTest {
+        api.loginResult = { authResponse(refresh = null) }
+
+        val error = runCatching { repo.login("ahmad", "secret", requiredRole = "STUDENT") }.exceptionOrNull()
+
+        assertTrue(error is ApiException)
+        assertNull(store.value)
     }
 
     @Test

@@ -1,7 +1,6 @@
 # Kontrak API yang diminta klien Android
 
-Bagian Autentikasi adalah permintaan klien: identity-service belum memilikinya, sepakati dengan
-tim sebelum diimplementasikan. Bagian Ujian sudah ada di exam-service dan mengikuti OpenAPI-nya.
+Kontrak ini sudah ada di identity-service dan exam-service dan mengikuti OpenAPI keduanya.
 
 ## Envelope
 
@@ -12,25 +11,29 @@ Semua respons dibungkus `ResponseInterceptor`:
 ```
 
 Error: `{ "statusCode": 401, "message": "Kredensial salah", "data": null }`.
-Field autentikasi memakai snake_case; field ujian memakai camelCase (lihat bagian Ujian).
+Semua field JSON memakai camelCase.
 
 ## Autentikasi (identity-service)
 
+Rute ini ada di identity-service (`/auth/native/*`). Semua field camelCase.
+
 | Endpoint | Body | `data` |
 |---|---|---|
-| `POST /auth/native/login` | `{identifier, password, device_id}` | `{access_token, refresh_token, expires_in, user: {id, name, roles[]}}` |
-| `POST /auth/native/refresh` | `{refresh_token, device_id}` | sama dengan login; refresh token dirotasi |
-| `POST /auth/native/logout` | `{refresh_token}` | `null` |
+| `POST /auth/native/login` | `{identifier, password, deviceId}` | `{accessToken, refreshToken, expiresIn, user: {id, name, roles[]}}` |
+| `POST /auth/native/refresh` | `{refreshToken, deviceId}` | sama dengan login; refresh token dirotasi |
+| `POST /auth/native/logout` | `{refreshToken}` | tanpa isi (204) |
 
-- Token dikembalikan di body, tanpa cookie.
-- Hanya role `STUDENT` dan `TEACHER` yang diterima.
+- Token dikembalikan di body, tanpa cookie. `expiresIn` dalam detik.
+- Hanya akun dengan role `STUDENT` atau `TEACHER` yang diterima (`403` selain itu); salah kata sandi `401`; terlalu sering `429`.
 - `TEACHER` dipakai untuk verifikasi pengawas lewat endpoint login yang sama.
-- `expires_in` dalam detik.
+- Sesi terikat ke `deviceId` yang dipakai saat login: refresh dari `deviceId` lain `401` tanpa mengubah apa pun.
+- Refresh yang berbalapan dengan refresh lain menjawab access token baru dengan `refreshToken: null`; klien memakai refresh token yang sudah dipegangnya.
+- Logout idempoten dan tidak gagal untuk token yang sudah tidak berlaku.
 
 ## Ujian (exam-service)
 
 Kontrak ini mengikuti `services/contracts/exam/openapi.json`; exam-service memegang kontraknya dan klien
-mengikutinya. Field exam memakai camelCase. Kontrak auth di atas tetap snake_case dan belum disepakati.
+mengikutinya.
 
 Semua permintaan mengirim `Authorization: Bearer <access token>` dan `X-Device-Id: <id perangkat>`. Rute
 `student-exams/*` menjawab `400` bila header kedua hilang dan `409` bila sesi terikat ke perangkat lain.
