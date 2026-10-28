@@ -49,6 +49,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -211,16 +212,21 @@ fun ExamContent(
 
     Scaffold(
         topBar = {
+            // At large font scales the fixed 54dp bar cannot hold logo + timer + action;
+            // let it grow and drop the decorative badge instead of clipping the timer/action.
+            val largeFont = LocalDensity.current.fontScale > 1.2f
+            val compactTopBar = largeFont || LocalConfiguration.current.screenWidthDp < 360
             Surface(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(54.dp),
+                    .heightIn(min = 54.dp),
                 color = BrandSurface,
                 border = androidx.compose.foundation.BorderStroke(1.dp, BorderSubtle)
             ) {
                 Row(
                     modifier = Modifier
-                        .fillMaxSize()
+                        .fillMaxWidth()
+                        .heightIn(min = 54.dp)
                         .padding(horizontal = 16.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
@@ -235,19 +241,21 @@ fun ExamContent(
                             modifier = Modifier.height(28.dp),
                             contentScale = ContentScale.Fit
                         )
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(4.dp))
-                                .background(BrandNavySubtle)
-                                .padding(horizontal = 6.dp, vertical = 2.dp)
-                        ) {
-                            Text(
-                                text = "ASSESSMENT",
-                                fontFamily = DMSansFontFamily,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 10.sp,
-                                color = BrandNavy
-                            )
+                        if (!compactTopBar) {
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(4.dp))
+                                    .background(BrandNavySubtle)
+                                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                            ) {
+                                Text(
+                                    text = "ASSESSMENT",
+                                    fontFamily = DMSansFontFamily,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 10.sp,
+                                    color = BrandNavy
+                                )
+                            }
                         }
                     }
 
@@ -278,14 +286,16 @@ fun ExamContent(
                             enabled = state.canSubmit,
                             colors = ButtonDefaults.buttonColors(containerColor = StatusError),
                             shape = RoundedCornerShape(6.dp),
-                            modifier = Modifier.height(32.dp),
+                            modifier = Modifier.heightIn(min = 32.dp),
                             contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = 0.dp)
                         ) {
                             Text(
                                 text = if (state.isSubmitting) "Mengirim…" else "Selesai",
                                 fontFamily = DMSansFontFamily,
                                 fontWeight = FontWeight.SemiBold,
-                                fontSize = 12.sp
+                                fontSize = 12.sp,
+                                maxLines = 1,
+                                softWrap = false
                             )
                         }
                     }
@@ -540,7 +550,8 @@ fun ExamContent(
                                     Surface(
                                         shape = RoundedCornerShape(6.dp),
                                         color = BrandMuted,
-                                        border = androidx.compose.foundation.BorderStroke(1.dp, BorderSubtle)
+                                        border = androidx.compose.foundation.BorderStroke(1.dp, BorderSubtle),
+                                        modifier = Modifier.weight(1f, fill = false)
                                     ) {
                                         Text(
                                             text = "Soal Nomor ${state.currentIndex + 1} dari ${state.questions.size}",
@@ -561,6 +572,9 @@ fun ExamContent(
                                             fontFamily = DMSansFontFamily,
                                             fontWeight = FontWeight.SemiBold,
                                             fontSize = 11.sp,
+                                            maxLines = 1,
+                                            softWrap = false,
+                                            overflow = TextOverflow.Ellipsis,
                                             color = StatusSuccess,
                                             modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
                                         )
