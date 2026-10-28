@@ -115,9 +115,27 @@ fun ExamContent(
     }
 
     LaunchedEffect(state.submitError) {
-        if (state.submitError != null) {
+        if (state.submitError != null && !state.isTimeOver) {
             showConfirmDialog = true
         }
+    }
+
+    if (state.isTimeOver && !state.isSubmitted) {
+        AlertDialog(
+            onDismissRequest = {},
+            title = { Text("Waktu habis") },
+            text = {
+                Text(
+                    state.submitError?.let { "Mengirim jawaban… $it Mencoba lagi." }
+                        ?: "Mengirim jawaban…"
+                )
+            },
+            confirmButton = {
+                if (!state.isSubmitting && state.submitError != null) {
+                    TextButton(onClick = onSubmit) { Text("Coba lagi") }
+                }
+            }
+        )
     }
 
     if (showConfirmDialog) {

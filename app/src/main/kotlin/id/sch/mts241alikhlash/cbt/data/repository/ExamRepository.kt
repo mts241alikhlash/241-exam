@@ -8,6 +8,7 @@ import id.sch.mts241alikhlash.cbt.data.model.AnswerPayload
 import id.sch.mts241alikhlash.cbt.data.model.PaperChoiceDto
 import id.sch.mts241alikhlash.cbt.data.model.PaperQuestionDto
 import id.sch.mts241alikhlash.cbt.data.model.SaveAnswerRequest
+import id.sch.mts241alikhlash.cbt.data.model.SubmittedSessionDto
 import id.sch.mts241alikhlash.cbt.data.remote.ApiException
 import id.sch.mts241alikhlash.cbt.data.remote.ExamApiService
 import id.sch.mts241alikhlash.cbt.data.remote.guarded
@@ -101,6 +102,8 @@ class ExamRepository(
             log("Failed to cache questions for $sessionId", error)
         }
     }
+
+    suspend fun submit(sessionId: String): SubmittedSessionDto = guarded { api.submit(sessionId) }
 
     suspend fun clearQuestions(sessionId: String) {
         questionDao.deleteForSession(sessionId)

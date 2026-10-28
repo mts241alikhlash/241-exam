@@ -150,7 +150,7 @@ class ExamViewModelSubmitTest {
         assertFalse("submit must be disabled before load", vm.uiState.value.canSubmit)
 
         vm.submitExam()
-        advanceUntilIdle()
+        runCurrent()
 
         assertFalse(vm.uiState.value.isSubmitted)
         assertEquals(0, api.uploadCount)
@@ -159,13 +159,13 @@ class ExamViewModelSubmitTest {
     @Test
     fun `submit is rejected when the paper failed to load`() = runTest {
         val vm = viewModel(repoWithQuestions(api = FailingQuestionsApi(failFirst = true)))
-        advanceUntilIdle()
+        runCurrent()
 
         assertNotNull(vm.uiState.value.errorMessage)
         assertFalse(vm.uiState.value.canSubmit)
 
         vm.submitExam()
-        advanceUntilIdle()
+        runCurrent()
 
         assertFalse(vm.uiState.value.isSubmitted)
     }
@@ -188,13 +188,13 @@ class ExamViewModelSubmitTest {
     fun `retry reloads with forceRefresh and recovers`() = runTest {
         val api = FailingQuestionsApi(failFirst = true)
         val vm = viewModel(repoWithQuestions(api = api))
-        advanceUntilIdle()
+        runCurrent()
 
         assertNotNull(vm.uiState.value.errorMessage)
         assertEquals(1, api.questionCalls)
 
         vm.retry()
-        advanceUntilIdle()
+        runCurrent()
 
         val state = vm.uiState.value
         assertNull("error must clear after a successful retry", state.errorMessage)
