@@ -59,6 +59,7 @@ private class HtmlParser(private val html: String) {
     private val rowCells = mutableListOf<List<HtmlSpan>>()
     private var rowOpen = false
     private var cellOpen = false
+    private val pendingImages = mutableListOf<String>()
 
     fun parse(): List<HtmlBlock> {
         var index = 0
@@ -160,7 +161,10 @@ private class HtmlParser(private val html: String) {
 
     private fun image(tag: Tag) {
         val id = tag.attributes["data-file-id"]?.takeIf { FILE_ID.matches(it) } ?: return
-        if (itemOpen || cellOpen) return
+        if (itemOpen || cellOpen) {
+            pendingImages += id.lowercase()
+            return
+        }
         flushParagraph()
         blocks += HtmlBlock.Image(id.lowercase())
     }
@@ -198,6 +202,7 @@ private class HtmlParser(private val html: String) {
         if (ordered != null && listItems.isNotEmpty()) blocks += HtmlBlock.ListBlock(ordered, listItems.toList())
         listItems.clear()
         listOrdered = null
+        emitPendingImages()
     }
 
     private fun startTable() {
@@ -238,6 +243,12 @@ private class HtmlParser(private val html: String) {
         if (tableOpen && tableRows.isNotEmpty()) blocks += HtmlBlock.Table(tableRows.toList())
         tableRows.clear()
         tableOpen = false
+        emitPendingImages()
+    }
+
+    private fun emitPendingImages() {
+        pendingImages.forEach { blocks += HtmlBlock.Image(it) }
+        pendingImages.clear()
     }
 
     private fun closeAll() {

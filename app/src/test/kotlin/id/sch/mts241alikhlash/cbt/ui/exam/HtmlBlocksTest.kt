@@ -104,4 +104,18 @@ class HtmlBlocksTest {
         assertTrue((arabic[0] as HtmlBlock.Paragraph).rtl)
         assertFalse((arabic[1] as HtmlBlock.Paragraph).rtl)
     }
+
+    @Test
+    fun an_image_inside_a_table_cell_follows_the_table() {
+        val blocks = parseHtml("""<table><tr><td>a<img data-file-id="$id"></td></tr></table>""")
+        assertEquals(listOf("T", "I"), blocks.map { if (it is HtmlBlock.Image) "I" else "T" })
+        assertEquals(id, (blocks[1] as HtmlBlock.Image).fileId)
+    }
+
+    @Test
+    fun an_image_inside_a_list_item_follows_the_list() {
+        val blocks = parseHtml("""<ul><li>satu<img data-file-id="$id"></li><li>dua</li></ul>""")
+        assertEquals(listOf("L", "I"), blocks.map { if (it is HtmlBlock.Image) "I" else "L" })
+        assertEquals(listOf("satu", "dua"), (blocks[0] as HtmlBlock.ListBlock).items.map { it.plain() })
+    }
 }

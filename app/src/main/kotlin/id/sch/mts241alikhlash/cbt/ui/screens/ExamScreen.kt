@@ -87,7 +87,8 @@ fun ExamScreen(
     baseUrl: String,
     imageLoader: coil3.ImageLoader?,
     onFinish: () -> Unit,
-    onSupervisorExit: () -> Unit = {}
+    onSupervisorExit: () -> Unit = {},
+    onSessionLost: (String) -> Unit = {}
 ) {
     val state by viewModel.uiState.collectAsState()
     ExamContent(
@@ -101,6 +102,7 @@ fun ExamScreen(
         onRetry = viewModel::retry,
         onFinish = onFinish,
         onSupervisorExit = onSupervisorExit,
+        onSessionLost = onSessionLost,
         sessionId = sessionId,
         baseUrl = baseUrl,
         imageLoader = imageLoader
@@ -119,6 +121,7 @@ fun ExamContent(
     onRetry: () -> Unit,
     onFinish: () -> Unit,
     onSupervisorExit: () -> Unit = {},
+    onSessionLost: (String) -> Unit = {},
     sessionId: String = "",
     baseUrl: String = "",
     imageLoader: coil3.ImageLoader? = null
@@ -129,6 +132,10 @@ fun ExamContent(
         LaunchedEffect(Unit) {
             onFinish()
         }
+    }
+
+    LaunchedEffect(state.lostMessage) {
+        state.lostMessage?.let(onSessionLost)
     }
 
     LaunchedEffect(state.submitError) {
@@ -498,6 +505,15 @@ fun ExamContent(
                         .padding(padding)
                         .padding(horizontal = 16.dp, vertical = 12.dp)
                 ) {
+                    state.deliveryWarning?.let { warning ->
+                        Text(
+                            text = warning,
+                            fontFamily = DMSansFontFamily,
+                            fontSize = 12.sp,
+                            color = StatusError,
+                            modifier = Modifier.padding(bottom = 8.dp)
+                        )
+                    }
                     if (state.isResumed) {
                         Surface(
                             shape = RoundedCornerShape(8.dp),

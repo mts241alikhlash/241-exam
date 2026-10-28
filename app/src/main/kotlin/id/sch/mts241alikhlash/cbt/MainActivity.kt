@@ -234,6 +234,19 @@ class MainActivity : ComponentActivity() {
                         baseUrl = BuildConfig.BASE_URL,
                         imageLoader = app.imageLoader,
                         onSupervisorExit = { showSupervisorExit = true },
+                        onSessionLost = { message ->
+                            lifecycleScope.launch {
+                                runCatching { app.sessionRepository.finishIfCurrent(sessionId) }
+                                isExamActive = false
+                                stopKioskMode()
+                                appState = appState.copy(
+                                    sessionId = null,
+                                    deadline = null,
+                                    selectedExam = null,
+                                    notice = message
+                                )
+                            }
+                        },
                         onFinish = {
                             // Teardown must finish before success is announced: if the
                             // session survives, the next launch would resume a submitted
@@ -254,10 +267,14 @@ class MainActivity : ComponentActivity() {
                                 stopKioskMode()
                                 appState = appState.copy(sessionId = null, deadline = null, selectedExam = null)
 
+                                val unsent = viewModel.uiState.value.unsentAnswers
                                 Toast.makeText(
                                     this@MainActivity,
-                                    if (ended) "Ujian berhasil dikumpulkan"
-                                    else "Ujian selesai, tetapi sesi gagal dibersihkan",
+                                    when {
+                                        unsent > 0 -> "Ujian dikumpulkan, tetapi $unsent jawaban tidak sempat terkirim"
+                                        ended -> "Ujian berhasil dikumpulkan"
+                                        else -> "Ujian selesai, tetapi sesi gagal dibersihkan"
+                                    },
                                     Toast.LENGTH_LONG
                                 ).show()
                             }

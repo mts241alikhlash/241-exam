@@ -6,6 +6,7 @@ import id.sch.mts241alikhlash.cbt.data.model.AnswerPayload
 import id.sch.mts241alikhlash.cbt.data.model.PaperQuestionDto
 import id.sch.mts241alikhlash.cbt.data.remote.ApiException
 import id.sch.mts241alikhlash.cbt.data.repository.ExamRepository
+import id.sch.mts241alikhlash.cbt.data.repository.SendOutcome
 import id.sch.mts241alikhlash.cbt.data.session.ExamTimer
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -27,7 +28,10 @@ data class ExamUiState(
     val isSubmitting: Boolean = false,
     val submitError: String? = null,
     val isResumed: Boolean = false,
-    val isTimeOver: Boolean = false
+    val isTimeOver: Boolean = false,
+    val deliveryWarning: String? = null,
+    val lostMessage: String? = null,
+    val unsentAnswers: Int = 0
 ) {
     /** Answers only make sense once a paper is on screen and not being submitted. */
     val canAnswer: Boolean get() = !isLoading && !isSubmitting && !isSubmitted && !isTimeOver && questions.isNotEmpty()
@@ -131,7 +135,7 @@ class ExamViewModel(
     private suspend fun autoSubmit() {
         _uiState.value = _uiState.value.copy(isTimeOver = true)
         var attempts = 0
-        while (!_uiState.value.isSubmitted && attempts < AUTO_SUBMIT_MAX_ATTEMPTS) {
+        while (!_uiState.value.isSubmitted && _uiState.value.lostMessage == null && attempts < AUTO_SUBMIT_MAX_ATTEMPTS) {
             if (!_uiState.value.isSubmitting) {
                 attempts++
                 if (runSubmit()) break
@@ -151,7 +155,7 @@ class ExamViewModel(
         optimistic[questionId] = answer
         val currentDoubt = _uiState.value.doubtfuls.contains(questionId)
         viewModelScope.launch {
-            repository.recordAnswer(questionId, sessionId, answer.encode(), currentDoubt)
+            handle(repository.recordAnswer(questionId, sessionId, answer.encode(), currentDoubt))
         }
     }
 
@@ -172,12 +176,22 @@ class ExamViewModel(
         }
     }
 
+    private fun handle(outcome: SendOutcome) {
+        when (outcome) {
+            is SendOutcome.Closed -> _uiState.value =
+                if (outcome.message == WINDOW_CLOSED_MESSAGE) _uiState.value.copy(deliveryWarning = outcome.message)
+                else _uiState.value.copy(lostMessage = outcome.message)
+            is SendOutcome.Rejected -> _uiState.value = _uiState.value.copy(deliveryWarning = outcome.message)
+            else -> Unit
+        }
+    }
+
     private suspend fun commitDraft(questionId: String) {
         val text = _uiState.value.drafts[questionId] ?: return
         val payload = AnswerPayload.Text(text)
         optimistic[questionId] = payload
         val doubt = _uiState.value.doubtfuls.contains(questionId)
-        repository.recordAnswer(questionId, sessionId, payload.encode(), doubt)
+        handle(repository.recordAnswer(questionId, sessionId, payload.encode(), doubt))
         if (_uiState.value.drafts[questionId] == text) {
             _uiState.value = _uiState.value.copy(drafts = _uiState.value.drafts - questionId)
         }
@@ -195,7 +209,7 @@ class ExamViewModel(
         val currentAnswer = currentAnswer(questionId)?.encode() ?: ""
         val newDoubt = !_uiState.value.doubtfuls.contains(questionId)
         viewModelScope.launch {
-            repository.recordAnswer(questionId, sessionId, currentAnswer, newDoubt)
+            handle(repository.recordAnswer(questionId, sessionId, currentAnswer, newDoubt))
         }
     }
 
@@ -222,8 +236,12 @@ class ExamViewModel(
             // syncPending re-reads the queue, so `failed` is the truth at this moment.
             // A rejected answer can never be sent, and a closed session is finished by
             // the server itself, so neither may keep the student from handing in.
+            val lost = report.closedMessage?.takeIf { it != WINDOW_CLOSED_MESSAGE }
             val blocking = report.failed - report.rejected
-            if (blocking > 0 && report.closedMessage == null) {
+            if (lost != null) {
+                _uiState.value = _uiState.value.copy(isSubmitting = false, lostMessage = lost)
+                false
+            } else if (blocking > 0 && report.closedMessage == null) {
                 _uiState.value = _uiState.value.copy(
                     isSubmitting = false,
                     submitError = "${report.failed} jawaban belum terkirim. Coba lagi."
@@ -231,13 +249,20 @@ class ExamViewModel(
                 false
             } else {
                 repository.submit(sessionId)
-                _uiState.value = _uiState.value.copy(isSubmitting = false, isSubmitted = true)
+                _uiState.value = _uiState.value.copy(
+                    isSubmitting = false,
+                    isSubmitted = true,
+                    unsentAnswers = report.failed
+                )
                 true
             }
         } catch (cancellation: kotlin.coroutines.cancellation.CancellationException) {
             throw cancellation
         } catch (error: Exception) {
-            _uiState.value = _uiState.value.copy(
+            val sessionLost = (error as? ApiException)?.takeIf { it.statusCode == 409 && it.message != WINDOW_CLOSED_MESSAGE }
+            _uiState.value = if (sessionLost != null) {
+                _uiState.value.copy(isSubmitting = false, lostMessage = sessionLost.message)
+            } else _uiState.value.copy(
                 isSubmitting = false,
                 submitError = (error as? ApiException)?.message?.takeIf { it.isNotBlank() }
                     ?: SUBMIT_ERROR_MESSAGE
@@ -248,6 +273,7 @@ class ExamViewModel(
 
     companion object {
         const val EMPTY_PAPER_MESSAGE = "Soal ujian tidak tersedia. Periksa koneksi lalu coba lagi."
+        const val WINDOW_CLOSED_MESSAGE = "Waktu pengiriman jawaban sudah habis"
         const val TEXT_DEBOUNCE_MS = 600L
         const val MAX_TEXT_LENGTH = 20_000
         const val AUTO_SUBMIT_RETRY_MS = 5_000L
