@@ -219,15 +219,20 @@ class MainActivity : ComponentActivity() {
                         )
                         return@AssessmentAppRoot
                     }
-                    val viewModel = remember(sessionId) {
-                        ExamViewModel(
-                            repository = app.repository,
-                            sessionId = sessionId,
-                            deadline = deadline,
-                            restored = sessionRestored,
-                            onSubmitConfirmed = { id -> app.sessionRepository.finishIfCurrent(id) }
-                        )
-                    }
+                    val viewModel = viewModel<ExamViewModel>(
+                        key = "exam-$sessionId",
+                        factory = viewModelFactory {
+                            initializer {
+                                ExamViewModel(
+                                    repository = app.repository,
+                                    sessionId = sessionId,
+                                    deadline = deadline,
+                                    restored = sessionRestored,
+                                    onSubmitConfirmed = { id -> app.sessionRepository.finishIfCurrent(id) }
+                                )
+                            }
+                        }
+                    )
 
                     ExamScreen(
                         viewModel = viewModel,
