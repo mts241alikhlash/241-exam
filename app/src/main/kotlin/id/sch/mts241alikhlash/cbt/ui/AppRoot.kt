@@ -21,6 +21,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import id.sch.mts241alikhlash.cbt.data.auth.AuthUser
+import id.sch.mts241alikhlash.cbt.data.model.ExamSummaryDto
 import id.sch.mts241alikhlash.cbt.ui.screens.TokenScreen
 import id.sch.mts241alikhlash.cbt.ui.theme.AssessmentTheme
 import id.sch.mts241alikhlash.cbt.ui.theme.BrandBackground
@@ -34,11 +36,15 @@ data class AppRootState(
     val restoreComplete: Boolean = false,
     val restoreError: String? = null,
     val sessionId: String? = null,
-    val deadline: Long? = null
+    val deadline: Long? = null,
+    val user: AuthUser? = null,
+    val selectedExam: ExamSummaryDto? = null,
+    val starting: Boolean = false,
+    val startError: String? = null
 )
 
 /**
- * The application root: splash → restore error → token screen → exam.
+ * The application root: splash → restore error → exam (active session) → login → exam list → token → exam.
  *
  * The whole tree is wrapped in [AssessmentTheme] here, and nowhere else in `main`, so
  * brand colours resolve through `MaterialTheme` (e.g. `ButtonDefaults.buttonColors(
@@ -50,7 +56,19 @@ fun AssessmentAppRoot(
     state: AppRootState,
     onRetryRestore: () -> Unit,
     onStartExam: (String) -> Unit,
-    examContent: @Composable (sessionId: String, deadline: Long?) -> Unit
+    examContent: @Composable (sessionId: String, deadline: Long?) -> Unit,
+    loginContent: @Composable () -> Unit = {},
+    examListContent: @Composable () -> Unit = {},
+    onBackToList: () -> Unit = {},
+    tokenContent: @Composable (ExamSummaryDto) -> Unit = { exam ->
+        TokenScreen(
+            examTitle = exam.title,
+            loading = state.starting,
+            error = state.startError,
+            onBack = onBackToList,
+            onStartExam = onStartExam
+        )
+    }
 ) {
     AssessmentTheme {
         when {
@@ -61,9 +79,13 @@ fun AssessmentAppRoot(
                 onRetry = onRetryRestore
             )
 
-            state.sessionId == null -> TokenScreen(onStartExam = onStartExam)
+            state.sessionId != null -> examContent(state.sessionId, state.deadline)
 
-            else -> examContent(state.sessionId, state.deadline)
+            state.user == null -> loginContent()
+
+            state.selectedExam == null -> examListContent()
+
+            else -> tokenContent(state.selectedExam)
         }
     }
 }

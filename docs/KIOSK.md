@@ -47,3 +47,10 @@ Gunakan hanya untuk demo/uji internal.
 adb shell dpm remove-active-admin \
   id.sch.mts241alikhlash.cbt/.kiosk.ExamDeviceAdminReceiver
 ```
+
+## Keluar darurat oleh pengawas
+
+Tombol keluar darurat meminta akun guru dan kata sandi (role `TEACHER`) yang diperiksa ke
+server. Perangkat harus online; tanpa koneksi kunci tidak bisa dilepas lewat aplikasi.
+Percobaan yang ditolak dicatat sebagai `supervisor_exit_denied`, yang berhasil sebagai
+`supervisor_exit`. PIN statis `SUPERVISOR_PIN` sudah dihapus dari build.

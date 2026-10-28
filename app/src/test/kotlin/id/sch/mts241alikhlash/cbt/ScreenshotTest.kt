@@ -3,6 +3,8 @@ package id.sch.mts241alikhlash.cbt
 import androidx.compose.runtime.Composable
 import app.cash.paparazzi.DeviceConfig
 import app.cash.paparazzi.Paparazzi
+import id.sch.mts241alikhlash.cbt.data.auth.AuthUser
+import id.sch.mts241alikhlash.cbt.data.model.ExamSummaryDto
 import id.sch.mts241alikhlash.cbt.data.model.StudentQuestionDto
 import id.sch.mts241alikhlash.cbt.ui.AppRootState
 import id.sch.mts241alikhlash.cbt.ui.AssessmentAppRoot
@@ -38,7 +40,14 @@ class ScreenshotTest {
     fun appRootTokenScreen() {
         paparazzi.snapshot {
             AssessmentAppRoot(
-                state = AppRootState(restoreComplete = true),
+                state = AppRootState(
+                    restoreComplete = true,
+                    user = AuthUser("u1", "Ahmad", setOf("STUDENT")),
+                    selectedExam = ExamSummaryDto(
+                        "e1", "UTS Matematika", "Matematika", "2026-11-01T01:00:00Z",
+                        "2026-11-01T03:00:00Z", 90, "OPEN"
+                    )
+                ),
                 onRetryRestore = {},
                 onStartExam = {},
                 examContent = { _, _ -> }
