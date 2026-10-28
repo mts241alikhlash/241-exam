@@ -30,6 +30,9 @@ class MainActivity : ComponentActivity() {
     /** True when the OS confirms the task is actually pinned; gates the exam UI. */
     private val isPinned = mutableStateOf(false)
 
+    private val mainHandler = android.os.Handler(android.os.Looper.getMainLooper())
+    private val pinRecheck = Runnable { verifyPinState() }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -230,6 +233,7 @@ class MainActivity : ComponentActivity() {
     private fun stopKioskMode() {
         isExamActive = false
         isPinned.value = false
+        mainHandler.removeCallbacks(pinRecheck)
         clearDeviceOwnerPolicies()
         applyExamWindowFlags()
         runCatching {
@@ -245,8 +249,18 @@ class MainActivity : ComponentActivity() {
             // Lock-task pinning is dropped when the screen turns off or the task is
             // backgrounded; re-arm it so returning to the app restores the kiosk.
             runCatching { startLockTask() }
+            // The pinning dialog answers asynchronously; sample now and again shortly.
             verifyPinState()
+            mainHandler.removeCallbacks(pinRecheck)
+            mainHandler.postDelayed(pinRecheck, 700)
         }
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        // The pinning dialog steals focus; when it closes (accepted or rejected)
+        // the real state is finally observable.
+        if (hasFocus && isExamActive) verifyPinState()
     }
 
     /**
