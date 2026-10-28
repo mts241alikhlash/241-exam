@@ -1,5 +1,6 @@
 package id.sch.mts241alikhlash.cbt.ui.screens
 
+import id.sch.mts241alikhlash.cbt.ui.exam.HtmlContent
 import id.sch.mts241alikhlash.cbt.data.model.AnswerPayload
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -79,6 +80,9 @@ import id.sch.mts241alikhlash.cbt.ui.theme.TextSecondary
 @Composable
 fun ExamScreen(
     viewModel: ExamViewModel,
+    sessionId: String,
+    baseUrl: String,
+    imageLoader: coil3.ImageLoader?,
     onFinish: () -> Unit,
     onSupervisorExit: () -> Unit = {}
 ) {
@@ -91,7 +95,10 @@ fun ExamScreen(
         onSubmit = viewModel::submitExam,
         onRetry = viewModel::retry,
         onFinish = onFinish,
-        onSupervisorExit = onSupervisorExit
+        onSupervisorExit = onSupervisorExit,
+        sessionId = sessionId,
+        baseUrl = baseUrl,
+        imageLoader = imageLoader
     )
 }
 
@@ -104,7 +111,10 @@ fun ExamContent(
     onSubmit: () -> Unit,
     onRetry: () -> Unit,
     onFinish: () -> Unit,
-    onSupervisorExit: () -> Unit = {}
+    onSupervisorExit: () -> Unit = {},
+    sessionId: String = "",
+    baseUrl: String = "",
+    imageLoader: coil3.ImageLoader? = null
 ) {
     var showConfirmDialog by remember { mutableStateOf(false) }
 
@@ -607,12 +617,11 @@ fun ExamContent(
                             }
 
                             item {
-                                Text(
-                                    text = currentQ.bodyHtml.replace(Regex("<[^>]*>"), ""),
-                                    fontFamily = DMSansFontFamily,
-                                    fontSize = 15.sp,
-                                    lineHeight = 22.sp,
-                                    color = TextPrimary,
+                                HtmlContent(
+                                    html = currentQ.bodyHtml,
+                                    sessionId = sessionId,
+                                    baseUrl = baseUrl,
+                                    imageLoader = imageLoader,
                                     modifier = Modifier.padding(bottom = 20.dp)
                                 )
                             }
@@ -665,12 +674,12 @@ fun ExamContent(
 
                                         Spacer(modifier = Modifier.width(12.dp))
 
-                                        Text(
-                                            text = choice.html.replace(Regex("<[^>]*>"), ""),
-                                            fontFamily = DMSansFontFamily,
-                                            fontSize = 14.sp,
-                                            color = if (isSelected) TextPrimary else TextSecondary,
-                                            lineHeight = 20.sp,
+                                        HtmlContent(
+                                            html = choice.html,
+                                            sessionId = sessionId,
+                                            baseUrl = baseUrl,
+                                            imageLoader = imageLoader,
+                                            fontSize = 14,
                                             modifier = Modifier.weight(1f)
                                         )
 

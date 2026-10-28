@@ -218,6 +218,9 @@ class MainActivity : ComponentActivity() {
 
                     ExamScreen(
                         viewModel = viewModel,
+                        sessionId = sessionId,
+                        baseUrl = BuildConfig.BASE_URL,
+                        imageLoader = app.imageLoader,
                         onSupervisorExit = { showSupervisorExit = true },
                         onFinish = {
                             // Teardown must finish before success is announced: if the

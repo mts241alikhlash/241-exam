@@ -41,6 +41,9 @@ class CBTApplication : Application() {
     lateinit var catalogRepository: ExamCatalogRepository
         private set
 
+    lateinit var imageLoader: coil3.ImageLoader
+        private set
+
     @Volatile
     var examActive: Boolean = false
 
@@ -91,6 +94,12 @@ class CBTApplication : Application() {
             .addInterceptor(logging)
             .connectTimeout(10, TimeUnit.SECONDS)
             .readTimeout(10, TimeUnit.SECONDS)
+            .build()
+
+        imageLoader = coil3.ImageLoader.Builder(this)
+            .components {
+                add(coil3.network.okhttp.OkHttpNetworkFetcherFactory(callFactory = { client }))
+            }
             .build()
 
         val retrofit = Retrofit.Builder()
