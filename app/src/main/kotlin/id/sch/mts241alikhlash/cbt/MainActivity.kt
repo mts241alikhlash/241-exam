@@ -1,5 +1,7 @@
 package id.sch.mts241alikhlash.cbt
 
+import android.app.admin.DevicePolicyManager
+import android.content.ComponentName
 import android.os.Bundle
 import android.view.WindowManager
 import android.widget.Toast
@@ -8,6 +10,7 @@ import androidx.activity.compose.setContent
 import androidx.compose.runtime.*
 import androidx.lifecycle.lifecycleScope
 import id.sch.mts241alikhlash.cbt.data.session.RestoreOutcome
+import id.sch.mts241alikhlash.cbt.kiosk.ExamDeviceAdminReceiver
 import id.sch.mts241alikhlash.cbt.data.session.endExamSession
 import id.sch.mts241alikhlash.cbt.data.session.restoreExamSession
 import id.sch.mts241alikhlash.cbt.ui.AppRootState
@@ -175,12 +178,42 @@ class MainActivity : ComponentActivity() {
     private fun startKioskMode() {
         applyExamWindowFlags()
         runCatching {
+            // With Device Owner the system pins silently and blocks the escape
+            // gesture; without it Android always shows a dismissible dialog.
             startLockTask()
+        }
+    }
+
+    private fun isDeviceOwner(): Boolean {
+        val dpm = getSystemService(DevicePolicyManager::class.java) ?: return false
+        return dpm.isDeviceOwnerApp(packageName)
+    }
+
+    /** Hides the system UI chrome that would otherwise let a student escape. */
+    private fun applyDeviceOwnerPolicies() {
+        if (!isDeviceOwner()) return
+        runCatching {
+            val dpm = getSystemService(DevicePolicyManager::class.java)
+            val admin = ComponentName(this, ExamDeviceAdminReceiver::class.java)
+            dpm.setLockTaskPackages(admin, arrayOf(packageName))
+            dpm.setStatusBarDisabled(admin, true)
+            dpm.setKeyguardDisabled(admin, true)
+        }
+    }
+
+    private fun clearDeviceOwnerPolicies() {
+        if (!isDeviceOwner()) return
+        runCatching {
+            val dpm = getSystemService(DevicePolicyManager::class.java)
+            val admin = ComponentName(this, ExamDeviceAdminReceiver::class.java)
+            dpm.setStatusBarDisabled(admin, false)
+            dpm.setKeyguardDisabled(admin, false)
         }
     }
 
     private fun stopKioskMode() {
         isExamActive = false
+        clearDeviceOwnerPolicies()
         applyExamWindowFlags()
         runCatching {
             stopLockTask()
@@ -189,6 +222,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        if (isExamActive) applyDeviceOwnerPolicies()
         // Lock-task pinning is dropped when the screen turns off or the task is
         // backgrounded; re-arm it so returning to the app restores the kiosk.
         if (isExamActive) {
