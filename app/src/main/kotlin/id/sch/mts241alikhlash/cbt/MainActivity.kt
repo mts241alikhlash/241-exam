@@ -151,6 +151,7 @@ class MainActivity : ComponentActivity() {
 
                     ExamScreen(
                         viewModel = viewModel,
+                        onSupervisorExit = { showSupervisorExit = true },
                         onFinish = {
                             // Teardown must finish before success is announced: if the
                             // session survives, the next launch would resume a submitted

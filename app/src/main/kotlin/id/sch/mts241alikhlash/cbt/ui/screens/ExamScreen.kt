@@ -78,7 +78,8 @@ import id.sch.mts241alikhlash.cbt.ui.theme.TextSecondary
 @Composable
 fun ExamScreen(
     viewModel: ExamViewModel,
-    onFinish: () -> Unit
+    onFinish: () -> Unit,
+    onSupervisorExit: () -> Unit = {}
 ) {
     val state by viewModel.uiState.collectAsState()
     ExamContent(
@@ -88,7 +89,8 @@ fun ExamScreen(
         onGoToIndex = viewModel::goToIndex,
         onSubmit = viewModel::submitExam,
         onRetry = viewModel::retry,
-        onFinish = onFinish
+        onFinish = onFinish,
+        onSupervisorExit = onSupervisorExit
     )
 }
 
@@ -100,7 +102,8 @@ fun ExamContent(
     onGoToIndex: (Int) -> Unit,
     onSubmit: () -> Unit,
     onRetry: () -> Unit,
-    onFinish: () -> Unit
+    onFinish: () -> Unit,
+    onSupervisorExit: () -> Unit = {}
 ) {
     var showConfirmDialog by remember { mutableStateOf(false) }
 
@@ -432,7 +435,8 @@ fun ExamContent(
                         .fillMaxSize()
                         .background(BrandBackground)
                         .padding(padding),
-                    onRetry = onRetry
+                    onRetry = onRetry,
+                    onSupervisorExit = onSupervisorExit
                 )
             }
 
@@ -443,6 +447,7 @@ fun ExamContent(
                         .fillMaxSize()
                         .background(BrandBackground)
                         .padding(padding),
+                    onSupervisorExit = onSupervisorExit,
                     onRetry = onRetry
                 )
             }
@@ -677,7 +682,8 @@ fun ExamContent(
 private fun ExamErrorContent(
     message: String,
     modifier: Modifier = Modifier,
-    onRetry: () -> Unit
+    onRetry: () -> Unit,
+    onSupervisorExit: () -> Unit = {}
 ) {
     Box(
         modifier = modifier,
@@ -725,6 +731,18 @@ private fun ExamErrorContent(
                     fontSize = 13.sp
                 )
             }
+            Spacer(modifier = Modifier.height(14.dp))
+            Text(
+                text = "Keluar darurat (pengawas)",
+                fontFamily = DMSansFontFamily,
+                fontWeight = FontWeight.Medium,
+                fontSize = 12.sp,
+                color = TextMuted,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(6.dp))
+                    .clickable(onClick = onSupervisorExit)
+                    .padding(horizontal = 10.dp, vertical = 6.dp)
+            )
         }
     }
 }
