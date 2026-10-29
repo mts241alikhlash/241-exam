@@ -2,6 +2,7 @@ package id.sch.mts241alikhlash.cbt.ui
 
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -10,60 +11,73 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.input.VisualTransformation
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import id.sch.mts241alikhlash.cbt.data.auth.SupervisorResult
 import id.sch.mts241alikhlash.cbt.ui.theme.DMSansFontFamily
 import id.sch.mts241alikhlash.cbt.ui.theme.StatusError
 import id.sch.mts241alikhlash.cbt.ui.theme.TextMuted
+import kotlinx.coroutines.launch
 
-/**
- * Supervisor-only escape hatch. The PIN is compiled into the APK, so this stops a
- * student but not someone who extracts the build; it exists for crash recovery.
- */
 @Composable
 fun SupervisorExitDialog(
-    expectedPin: String,
     onDismiss: () -> Unit,
+    onVerify: suspend (identifier: String, password: String) -> SupervisorResult,
     onConfirm: () -> Unit
 ) {
-    var pin by remember { mutableStateOf("") }
-    var wrong by remember { mutableStateOf(false) }
+    var identifier by remember { mutableStateOf("") }
+    var password by remember { mutableStateOf("") }
+    var checking by remember { mutableStateOf(false) }
+    var message by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
 
     AlertDialog(
-        onDismissRequest = onDismiss,
+        onDismissRequest = { if (!checking) onDismiss() },
         title = {
             Text(text = "Keluar darurat", fontFamily = DMSansFontFamily, fontSize = 18.sp)
         },
         text = {
             Column {
                 Text(
-                    text = "Hanya untuk pengawas. Masukkan PIN untuk melepas kunci perangkat.",
+                    text = "Hanya untuk pengawas. Masuk dengan akun guru untuk melepas kunci perangkat.",
                     fontFamily = DMSansFontFamily,
                     fontSize = 13.sp,
                     color = TextMuted
                 )
                 OutlinedTextField(
-                    value = pin,
+                    value = identifier,
                     onValueChange = {
-                        pin = it
-                        wrong = false
+                        identifier = it
+                        message = null
                     },
                     modifier = Modifier.padding(top = 12.dp),
                     singleLine = true,
-                    label = { Text("PIN pengawas", fontFamily = DMSansFontFamily) },
-                    isError = wrong,
-                    visualTransformation = PasswordVisualTransformation(),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword)
+                    enabled = !checking,
+                    label = { Text("Akun guru", fontFamily = DMSansFontFamily) },
+                    isError = message != null
                 )
-                if (wrong) {
+                OutlinedTextField(
+                    value = password,
+                    onValueChange = {
+                        password = it
+                        message = null
+                    },
+                    modifier = Modifier.padding(top = 8.dp),
+                    singleLine = true,
+                    enabled = !checking,
+                    label = { Text("Kata sandi", fontFamily = DMSansFontFamily) },
+                    isError = message != null,
+                    visualTransformation = PasswordVisualTransformation(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password)
+                )
+                message?.let {
                     Text(
-                        text = "PIN salah",
+                        text = it,
                         fontFamily = DMSansFontFamily,
                         fontSize = 12.sp,
                         color = StatusError,
@@ -73,12 +87,26 @@ fun SupervisorExitDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = { if (pin == expectedPin) onConfirm() else wrong = true }) {
-                Text("Keluar", fontFamily = DMSansFontFamily)
+            TextButton(
+                enabled = !checking,
+                onClick = {
+                    checking = true
+                    scope.launch {
+                        val result = onVerify(identifier, password)
+                        checking = false
+                        when (result) {
+                            SupervisorResult.Approved -> onConfirm()
+                            SupervisorResult.Denied -> message = "Akun bukan pengawas atau kata sandi salah"
+                            SupervisorResult.Offline -> message = "Pengawas perlu koneksi untuk membuka kunci."
+                        }
+                    }
+                }
+            ) {
+                Text(if (checking) "Memeriksa..." else "Keluar", fontFamily = DMSansFontFamily)
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) {
+            TextButton(enabled = !checking, onClick = onDismiss) {
                 Text("Batal", fontFamily = DMSansFontFamily)
             }
         }

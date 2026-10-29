@@ -15,7 +15,7 @@ class SessionRepository(
      * Re-starting the session that is already persisted keeps its original deadline:
      * a process restart must not hand the student a brand-new 90 minutes.
      */
-    suspend fun start(id: String) {
+    suspend fun start(id: String, deadline: Long = ExamTimer.deadlineFrom(now())) {
         val trimmed = id.trim()
         require(trimmed.isNotEmpty()) { "Session id must not be blank" }
 
@@ -25,7 +25,7 @@ class SessionRepository(
             return
         }
 
-        store.save(trimmed, ExamTimer.deadlineFrom(now()))
+        store.save(trimmed, deadline)
     }
 
     suspend fun finish() {

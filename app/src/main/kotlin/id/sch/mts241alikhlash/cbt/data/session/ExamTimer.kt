@@ -40,6 +40,6 @@ object ExamTimer {
      * [RESUME_TOLERANCE_SECONDS] of slack absorbs process-start latency; only a real gap
      * (the app was away for more than that) counts as resumed.
      */
-    fun isResumed(deadline: Long, now: Long): Boolean =
-        remainingSeconds(deadline, now) < EXAM_DURATION_SECONDS - RESUME_TOLERANCE_SECONDS
+    fun isResumed(deadline: Long, now: Long, restored: Boolean? = null): Boolean =
+        restored ?: (remainingSeconds(deadline, now) < EXAM_DURATION_SECONDS - RESUME_TOLERANCE_SECONDS)
 }

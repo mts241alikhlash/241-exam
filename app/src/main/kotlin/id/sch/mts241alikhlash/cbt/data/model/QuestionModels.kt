@@ -15,7 +15,8 @@ data class StudentQuestionDto(
 @Serializable
 data class SubmitAnswerRequest(
     @SerialName("question_id") val questionId: String,
-    val answer: String
+    val answer: String,
+    @SerialName("client_id") val clientId: String
 )
 
 @Serializable

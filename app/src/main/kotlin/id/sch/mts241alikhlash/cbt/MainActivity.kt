@@ -9,8 +9,19 @@ import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.runtime.*
+import id.sch.mts241alikhlash.cbt.ui.ReloginDialog
 import androidx.lifecycle.lifecycleScope
+import id.sch.mts241alikhlash.cbt.data.auth.SupervisorResult
+import id.sch.mts241alikhlash.cbt.data.remote.userMessage
 import id.sch.mts241alikhlash.cbt.data.session.RestoreOutcome
+import id.sch.mts241alikhlash.cbt.data.session.startExamSession
+import id.sch.mts241alikhlash.cbt.ui.screens.ExamListScreen
+import id.sch.mts241alikhlash.cbt.ui.screens.ExamListViewModel
+import id.sch.mts241alikhlash.cbt.ui.screens.LoginScreen
+import id.sch.mts241alikhlash.cbt.ui.screens.LoginViewModel
+import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.lifecycle.viewmodel.initializer
+import androidx.lifecycle.viewmodel.viewModelFactory
 import id.sch.mts241alikhlash.cbt.kiosk.ExamDeviceAdminReceiver
 import id.sch.mts241alikhlash.cbt.kiosk.KioskPolicy
 import id.sch.mts241alikhlash.cbt.kiosk.ViolationStore
@@ -28,7 +39,13 @@ class MainActivity : ComponentActivity() {
 
     private lateinit var violations: ViolationStore
     private var isExamActive = false
+        set(value) {
+            field = value
+            (application as? CBTApplication)?.examActive = value
+        }
     private var showSupervisorExit by mutableStateOf(false)
+    private var resumeCount by mutableIntStateOf(0)
+    private var sessionRestored: Boolean? = null
 
     /** True when the OS confirms the task is actually pinned; gates the exam UI. */
     private val isPinned = mutableStateOf(false)
@@ -80,9 +97,11 @@ class MainActivity : ComponentActivity() {
                 ) {
                     is RestoreOutcome.Restored -> {
                         isExamActive = true
+                        sessionRestored = true
                         startKioskMode()
                         appState = AppRootState(
                             restoreComplete = true,
+                            user = runCatching { app.authRepository.currentStudent() }.getOrNull(),
                             sessionId = outcome.session.sessionId,
                             deadline = outcome.session.deadline
                         )
@@ -96,7 +115,8 @@ class MainActivity : ComponentActivity() {
                     }
 
                     RestoreOutcome.NoSession -> {
-                        appState = AppRootState(restoreComplete = true)
+                        val storedUser = runCatching { app.authRepository.currentStudent() }.getOrNull()
+                        appState = AppRootState(restoreComplete = true, user = storedUser)
                     }
                 }
             }
@@ -107,28 +127,74 @@ class MainActivity : ComponentActivity() {
                     appState = appState.copy(restoreComplete = false)
                     restoreAttempt++
                 },
-                onStartExam = { sessionId ->
-                    isExamActive = true
-                    startKioskMode()
-                    lifecycleScope.launch {
-                        runCatching { app.sessionRepository.start(sessionId) }
-                            .onFailure {
-                                android.util.Log.e("MainActivity", "Failed to persist session", it)
-                                runOnUiThread {
-                                    isExamActive = false
-                                    stopKioskMode()
-                                    Toast.makeText(
-                                        this@MainActivity,
-                                        "Gagal memulai ujian. Coba lagi.",
-                                        Toast.LENGTH_LONG
-                                    ).show()
-                                }
-                                appState = appState.copy(sessionId = null, deadline = null)
+                onBackToList = { appState = appState.copy(selectedExam = null, startError = null) },
+                onStartExam = { accessCode ->
+                    val exam = appState.selectedExam
+                    if (exam != null && !appState.starting) {
+                        appState = appState.copy(starting = true, startError = null)
+                        lifecycleScope.launch {
+                            val started = runCatching {
+                                startExamSession(
+                                    app.catalogRepository,
+                                    app.sessionRepository,
+                                    exam.id,
+                                    accessCode
+                                )
+                            }
+                            val failure = started.exceptionOrNull()
+                            if (failure != null) {
+                                appState = appState.copy(
+                                    starting = false,
+                                    startError = failure.userMessage()
+                                )
                                 return@launch
                             }
-                        val deadline = runCatching { app.sessionRepository.deadline() }.getOrNull()
-                        appState = appState.copy(sessionId = sessionId, deadline = deadline)
+                            isExamActive = true
+                            sessionRestored = false
+                            startKioskMode()
+                            val deadline = runCatching { app.sessionRepository.deadline() }.getOrNull()
+                            appState = appState.copy(
+                                starting = false,
+                                selectedExam = null,
+                                sessionId = started.getOrThrow().sessionId,
+                                deadline = deadline
+                            )
+                        }
                     }
+                },
+                loginContent = {
+                    val loginViewModel = viewModel<LoginViewModel>(
+                        factory = viewModelFactory {
+                            initializer { LoginViewModel(app.authRepository) }
+                        }
+                    )
+                    val loggedInUser by loginViewModel.loggedIn.collectAsState()
+                    LaunchedEffect(loggedInUser) {
+                        loggedInUser?.let {
+                            appState = appState.copy(user = it)
+                            loginViewModel.consumed()
+                        }
+                    }
+                    LoginScreen(loginViewModel)
+                },
+                examListContent = {
+                    val listViewModel = viewModel<ExamListViewModel>(
+                        key = "exam-list-${appState.user?.id}",
+                        factory = viewModelFactory {
+                            initializer { ExamListViewModel(app.catalogRepository) }
+                        }
+                    )
+                    ExamListScreen(
+                        studentName = appState.user?.name.orEmpty(),
+                        viewModel = listViewModel,
+                        onSelect = { appState = appState.copy(selectedExam = it, startError = null) },
+                        onLogout = {
+                            lifecycleScope.launch {
+                                app.authRepository.logout()
+                                appState = appState.copy(user = null, selectedExam = null)
+                            }
+                        }
+                    )
                 },
                 examContent = { sessionId, deadline ->
                     if (isExamActive && !isPinned.value) {
@@ -145,7 +211,8 @@ class MainActivity : ComponentActivity() {
                         ExamViewModel(
                             repository = app.repository,
                             sessionId = sessionId,
-                            deadline = deadline
+                            deadline = deadline,
+                            restored = sessionRestored
                         )
                     }
 
@@ -170,7 +237,7 @@ class MainActivity : ComponentActivity() {
 
                                 isExamActive = false
                                 stopKioskMode()
-                                appState = appState.copy(sessionId = null, deadline = null)
+                                appState = appState.copy(sessionId = null, deadline = null, selectedExam = null)
 
                                 Toast.makeText(
                                     this@MainActivity,
@@ -184,9 +251,35 @@ class MainActivity : ComponentActivity() {
                 }
             )
 
+            val tokensRejected by app.authRepository.rejected.collectAsState()
+            var reloginDismissed by remember { mutableStateOf(false) }
+            LaunchedEffect(tokensRejected, resumeCount) {
+                if (tokensRejected) reloginDismissed = false
+            }
+            val activeSessionId = appState.sessionId
+            if (tokensRejected && activeSessionId != null && !reloginDismissed) {
+                ReloginDialog(
+                    onSubmit = { identifier, password ->
+                        val failure = runCatching { app.authRepository.relogin(identifier, password) }
+                            .exceptionOrNull()
+                        if (failure == null) {
+                            lifecycleScope.launch {
+                                runCatching { app.repository.syncPending(activeSessionId) }
+                            }
+                        }
+                        failure?.userMessage()
+                    },
+                    onDismiss = { reloginDismissed = true }
+                )
+            }
+
             if (showSupervisorExit) {
                 SupervisorExitDialog(
-                    expectedPin = BuildConfig.SUPERVISOR_PIN,
+                    onVerify = { identifier, password ->
+                        app.supervisorVerifier.verify(identifier, password).also {
+                            if (it != SupervisorResult.Approved) violations.record("supervisor_exit_denied")
+                        }
+                    },
                     onDismiss = { showSupervisorExit = false },
                     onConfirm = {
                         showSupervisorExit = false
@@ -294,6 +387,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        resumeCount++
         if (isExamActive) {
             applyDeviceOwnerPolicies()
             applyExamWindowFlags()

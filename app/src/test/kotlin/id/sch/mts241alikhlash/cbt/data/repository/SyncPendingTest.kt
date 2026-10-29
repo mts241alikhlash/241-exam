@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
 import org.junit.Test
 import java.io.IOException
 
@@ -47,6 +48,36 @@ class SyncPendingTest {
 
         assertEquals(1, report.synced)
         assertEquals("newly arrived pending answer must block submit", 1, report.failed)
+    }
+
+    @Test
+    fun `retry of the same revision sends the same client id`() = runTest {
+        val dao = SyncFakeAnswerDao(unsynced = listOf(ans("q1")))
+        val api = SyncFakeApi(failFor = setOf("q1"))
+        val repo = ExamRepository(api, dao, SyncFakeQuestionDao())
+
+        repo.syncPending("s1")
+        repo.syncPending("s1")
+
+        assertEquals(2, api.seen.size)
+        assertEquals(api.seen[0].clientId, api.seen[1].clientId)
+        assertEquals(answerClientId("s1", "q1", "answer-q1", 1_000L), api.seen[0].clientId)
+    }
+
+    @Test
+    fun `a newer revision of the same answer gets a different client id`() {
+        assertNotEquals(
+            answerClientId("s1", "q1", "a", 1_000L),
+            answerClientId("s1", "q1", "a", 2_000L)
+        )
+    }
+
+    @Test
+    fun `a different answer at the same timestamp gets a different client id`() {
+        assertNotEquals(
+            answerClientId("s1", "q1", "A", 1_000L),
+            answerClientId("s1", "q1", "C", 1_000L)
+        )
     }
 
     @Test
@@ -133,12 +164,15 @@ private class SyncFakeQuestionDao : QuestionDao {
 private class SyncFakeApi(
     private val failFor: Set<String> = emptySet()
 ) : ExamApiService {
+    val seen = mutableListOf<SubmitAnswerRequest>()
+
     override suspend fun getQuestions(sessionId: String): List<StudentQuestionDto> = emptyList()
 
     override suspend fun saveAnswer(
         sessionId: String,
         request: SubmitAnswerRequest
     ): StudentAnswerDto {
+        seen += request
         if (request.questionId in failFor) {
             throw IOException("network failure for ${request.questionId}")
         }

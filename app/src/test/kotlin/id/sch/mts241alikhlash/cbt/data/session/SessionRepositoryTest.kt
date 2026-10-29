@@ -101,3 +101,24 @@ private class InMemorySessionStore : SessionStore {
         deadline = null
     }
 }
+
+class SessionRepositoryServerDeadlineTest {
+    @Test
+    fun `start with explicit deadline persists it`() = runTest {
+        val repo = SessionRepository(InMemorySessionStore(), now = { 1_000L })
+
+        repo.start("sess-1", deadline = 61_000L)
+
+        assertEquals(61_000L, repo.deadline())
+    }
+
+    @Test
+    fun `restart of same session keeps the original explicit deadline`() = runTest {
+        val repo = SessionRepository(InMemorySessionStore(), now = { 1_000L })
+        repo.start("sess-1", deadline = 61_000L)
+
+        repo.start("sess-1", deadline = 99_000L)
+
+        assertEquals(61_000L, repo.deadline())
+    }
+}

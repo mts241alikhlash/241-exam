@@ -36,6 +36,7 @@ class ExamViewModel(
     private val repository: ExamRepository,
     private val sessionId: String,
     deadline: Long? = null,
+    restored: Boolean? = null,
     private val now: () -> Long = { System.currentTimeMillis() }
 ) : ViewModel() {
 
@@ -43,7 +44,7 @@ class ExamViewModel(
         ExamUiState(
             remainingSeconds = deadline?.let { ExamTimer.remainingSeconds(it, now()) }
                 ?: ExamTimer.EXAM_DURATION_SECONDS,
-            isResumed = deadline != null && ExamTimer.isResumed(deadline, now())
+            isResumed = deadline != null && ExamTimer.isResumed(deadline, now(), restored)
         )
     )
     val uiState: StateFlow<ExamUiState> = _uiState.asStateFlow()

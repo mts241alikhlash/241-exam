@@ -60,7 +60,11 @@ import id.sch.mts241alikhlash.cbt.ui.theme.TextSecondary
 
 @Composable
 fun TokenScreen(
-    onStartExam: (sessionId: String) -> Unit
+    onStartExam: (sessionId: String) -> Unit,
+    examTitle: String? = null,
+    loading: Boolean = false,
+    error: String? = null,
+    onBack: (() -> Unit)? = null
 ) {
     var sessionId by remember { mutableStateOf("") }
     var errorMessage by remember { mutableStateOf<String?>(null) }
@@ -142,7 +146,11 @@ fun TokenScreen(
                     Spacer(modifier = Modifier.height(4.dp))
 
                     Text(
-                        text = "Masukkan kode sesi atau token ujian dari pengawas untuk memulai.",
+                        text = if (examTitle != null) {
+                            "Masukkan token ujian dari pengawas untuk memulai $examTitle."
+                        } else {
+                            "Masukkan kode sesi atau token ujian dari pengawas untuk memulai."
+                        },
                         fontSize = 13.sp,
                         fontFamily = DMSansFontFamily,
                         color = TextMuted,
@@ -175,7 +183,7 @@ fun TokenScreen(
                             )
                         },
                         singleLine = true,
-                        isError = errorMessage != null,
+                        isError = errorMessage != null || error != null,
                         shape = RoundedCornerShape(8.dp),
                         modifier = Modifier.fillMaxWidth(),
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
@@ -188,10 +196,11 @@ fun TokenScreen(
                         )
                     )
 
-                    if (errorMessage != null) {
+                    val shownError = errorMessage ?: error
+                    if (shownError != null) {
                         Spacer(modifier = Modifier.height(6.dp))
                         Text(
-                            text = errorMessage!!,
+                            text = shownError,
                             color = StatusError,
                             fontSize = 12.sp,
                             fontFamily = DMSansFontFamily,
@@ -204,6 +213,7 @@ fun TokenScreen(
 
                     Button(
                         onClick = { submit() },
+                        enabled = !loading,
                         shape = RoundedCornerShape(8.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = BrandNavy),
                         modifier = Modifier
@@ -216,6 +226,17 @@ fun TokenScreen(
                             fontFamily = DMSansFontFamily,
                             fontWeight = FontWeight.SemiBold
                         )
+                    }
+
+                    if (onBack != null) {
+                        TextButton(onClick = onBack, enabled = !loading) {
+                            Text(
+                                text = "Kembali ke daftar ujian",
+                                fontSize = 13.sp,
+                                fontFamily = DMSansFontFamily,
+                                color = TextMuted
+                            )
+                        }
                     }
 
                     Spacer(modifier = Modifier.height(18.dp))
