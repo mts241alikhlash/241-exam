@@ -11,6 +11,7 @@ import id.sch.mts241alikhlash.cbt.data.model.PaperQuestionDto
 import id.sch.mts241alikhlash.cbt.data.model.SaveAnswerRequest
 import id.sch.mts241alikhlash.cbt.data.model.SavedAnswerAckDto
 import id.sch.mts241alikhlash.cbt.data.model.SavedAnswerDto
+import id.sch.mts241alikhlash.cbt.data.model.SubmitRequest
 import id.sch.mts241alikhlash.cbt.data.model.SubmittedSessionDto
 import id.sch.mts241alikhlash.cbt.data.remote.ExamApiService
 import id.sch.mts241alikhlash.cbt.data.remote.NETWORK_ERROR_MESSAGE
@@ -61,7 +62,7 @@ class ExamSubmitFlowTest {
             return ackFor(request)
         }
 
-        override suspend fun submit(sessionId: String): SubmittedSessionDto {
+        override suspend fun submit(sessionId: String, request: SubmitRequest): SubmittedSessionDto {
             events += "submit"
             submitCalls++
             if (submitFailures > 0) {

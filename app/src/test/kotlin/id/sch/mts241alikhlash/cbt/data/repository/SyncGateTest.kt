@@ -7,6 +7,7 @@ import id.sch.mts241alikhlash.cbt.data.local.CachedQuestionEntity
 import id.sch.mts241alikhlash.cbt.data.local.QuestionDao
 import id.sch.mts241alikhlash.cbt.data.model.SavedAnswerAckDto
 import id.sch.mts241alikhlash.cbt.data.model.SavedAnswerDto
+import id.sch.mts241alikhlash.cbt.data.model.SubmitRequest
 import id.sch.mts241alikhlash.cbt.data.model.SubmittedSessionDto
 import id.sch.mts241alikhlash.cbt.data.model.PaperQuestionDto
 import id.sch.mts241alikhlash.cbt.data.model.SaveAnswerRequest
@@ -127,7 +128,7 @@ class SyncGateTest {
 private class BlockingApi : ExamApiService {
     override suspend fun getAnswers(sessionId: String): List<SavedAnswerDto> = emptyList()
 
-    override suspend fun submit(sessionId: String): SubmittedSessionDto = SubmittedSessionDto("SUBMITTED")
+    override suspend fun submit(sessionId: String, request: SubmitRequest): SubmittedSessionDto = SubmittedSessionDto("SUBMITTED")
 
     private val started = CompletableDeferred<Unit>()
     private val release = CompletableDeferred<Unit>()
@@ -150,7 +151,7 @@ private class BlockingApi : ExamApiService {
 private class UploadingApi : ExamApiService {
     override suspend fun getAnswers(sessionId: String): List<SavedAnswerDto> = emptyList()
 
-    override suspend fun submit(sessionId: String): SubmittedSessionDto = SubmittedSessionDto("SUBMITTED")
+    override suspend fun submit(sessionId: String, request: SubmitRequest): SubmittedSessionDto = SubmittedSessionDto("SUBMITTED")
 
     override suspend fun getQuestions(sessionId: String): List<PaperQuestionDto> = emptyList()
 

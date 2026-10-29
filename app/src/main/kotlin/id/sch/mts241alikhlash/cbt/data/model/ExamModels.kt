@@ -31,6 +31,11 @@ data class StartedSessionDto(
 )
 
 @Serializable
+data class SubmitRequest(
+    val violations: Int = 0
+)
+
+@Serializable
 data class SubmittedSessionDto(
     val status: String,
     val submittedAt: String? = null

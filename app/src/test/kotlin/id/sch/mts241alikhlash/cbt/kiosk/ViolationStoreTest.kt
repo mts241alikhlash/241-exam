@@ -46,4 +46,27 @@ class ViolationStoreTest {
         assertEquals(0, store.count())
         assertTrue(store.entries().isEmpty())
     }
+
+    @Test
+    fun `the counted total leaves out what a supervisor allowed or refused`() {
+        store.record("left_app")
+        store.record("supervisor_exit")
+        store.record("supervisor_exit_denied")
+        store.record("pin_lost")
+
+        assertEquals(2, store.counted())
+    }
+
+    @Test
+    fun `a session keeps its count when it resumes and starts again from zero when another begins`() {
+        store.beginSession("s1")
+        store.record("left_app")
+        store.record("left_app")
+
+        store.beginSession("s1")
+        assertEquals(2, store.counted())
+
+        store.beginSession("s2")
+        assertEquals(0, store.counted())
+    }
 }

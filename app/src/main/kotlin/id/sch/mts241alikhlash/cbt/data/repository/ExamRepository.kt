@@ -8,6 +8,7 @@ import id.sch.mts241alikhlash.cbt.data.model.AnswerPayload
 import id.sch.mts241alikhlash.cbt.data.model.PaperChoiceDto
 import id.sch.mts241alikhlash.cbt.data.model.PaperQuestionDto
 import id.sch.mts241alikhlash.cbt.data.model.SaveAnswerRequest
+import id.sch.mts241alikhlash.cbt.data.model.SubmitRequest
 import id.sch.mts241alikhlash.cbt.data.model.SubmittedSessionDto
 import id.sch.mts241alikhlash.cbt.data.remote.ApiException
 import id.sch.mts241alikhlash.cbt.data.remote.ExamApiService
@@ -104,7 +105,8 @@ class ExamRepository(
         }
     }
 
-    suspend fun submit(sessionId: String): SubmittedSessionDto = guarded { api.submit(sessionId) }
+    suspend fun submit(sessionId: String, violations: Int = 0): SubmittedSessionDto =
+        guarded { api.submit(sessionId, SubmitRequest(violations)) }
 
     suspend fun clearQuestions(sessionId: String) {
         questionDao.deleteForSession(sessionId)

@@ -7,6 +7,7 @@ import id.sch.mts241alikhlash.cbt.data.local.CachedQuestionEntity
 import id.sch.mts241alikhlash.cbt.data.local.QuestionDao
 import id.sch.mts241alikhlash.cbt.data.model.SavedAnswerAckDto
 import id.sch.mts241alikhlash.cbt.data.model.SavedAnswerDto
+import id.sch.mts241alikhlash.cbt.data.model.SubmitRequest
 import id.sch.mts241alikhlash.cbt.data.model.SubmittedSessionDto
 import id.sch.mts241alikhlash.cbt.data.model.PaperQuestionDto
 import id.sch.mts241alikhlash.cbt.data.model.SaveAnswerRequest
@@ -171,7 +172,7 @@ private class SyncFakeApi(
 ) : ExamApiService {
     override suspend fun getAnswers(sessionId: String): List<SavedAnswerDto> = emptyList()
 
-    override suspend fun submit(sessionId: String): SubmittedSessionDto = SubmittedSessionDto("SUBMITTED")
+    override suspend fun submit(sessionId: String, request: SubmitRequest): SubmittedSessionDto = SubmittedSessionDto("SUBMITTED")
 
     val seen = mutableListOf<SaveAnswerRequest>()
 

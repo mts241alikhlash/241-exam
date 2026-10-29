@@ -75,6 +75,7 @@ import id.sch.mts241alikhlash.cbt.ui.components.SectionHeader
 import id.sch.mts241alikhlash.cbt.ui.components.SectionedCard
 import androidx.compose.ui.unit.sp
 import id.sch.mts241alikhlash.cbt.R
+import id.sch.mts241alikhlash.cbt.kiosk.ViolationPolicy
 import id.sch.mts241alikhlash.cbt.ui.theme.BorderFocus
 import id.sch.mts241alikhlash.cbt.ui.theme.BorderSubtle
 import id.sch.mts241alikhlash.cbt.ui.theme.BrandBackground
@@ -161,8 +162,29 @@ fun ExamContent(
     }
 
     LaunchedEffect(state.submitError) {
-        if (state.submitError != null && !state.isTimeOver) {
+        if (state.submitError != null && !state.isTimeOver && !state.violationExit) {
             showConfirmDialog = true
+        }
+    }
+
+    if (state.violationExit && !state.isSubmitted) {
+        AppDialog(
+            title = "Ujian dikumpulkan",
+            onDismiss = {},
+            dismissible = false,
+            footerEnd = if (!state.isSubmitting && state.submitError != null) {
+                { ActionButton(text = "Coba lagi", onClick = onSubmit) }
+            } else {
+                null
+            }
+        ) {
+            Text(
+                text = state.submitError?.let { "${ViolationPolicy.warning(ViolationPolicy.LIMIT + 1)} $it Mencoba lagi." }
+                    ?: "${ViolationPolicy.warning(ViolationPolicy.LIMIT + 1)} Jawaban dikirim seadanya.",
+                fontFamily = DMSansFontFamily,
+                fontSize = 13.sp,
+                color = TextPrimary
+            )
         }
     }
 
@@ -187,7 +209,7 @@ fun ExamContent(
         }
     }
 
-    if (showConfirmDialog) {
+    if (showConfirmDialog && !state.violationExit) {
         val total = state.questions.size
         val doubtfulCount = state.doubtfuls.size
         AppDialog(

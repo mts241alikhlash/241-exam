@@ -14,6 +14,13 @@ class ViolationStore(context: Context) {
 
     fun count(): Int = prefs.getInt(KEY_COUNT, 0)
 
+    fun counted(): Int = entries().count { ViolationPolicy.counts(it.substringAfter('|')) }
+
+    fun beginSession(sessionId: String) {
+        if (prefs.getString(KEY_SESSION, null) == sessionId) return
+        prefs.edit().clear().putString(KEY_SESSION, sessionId).apply()
+    }
+
     /** Appends one event and returns the new total. */
     fun record(reason: String): Int {
         val total = count() + 1
@@ -41,6 +48,7 @@ class ViolationStore(context: Context) {
     private companion object {
         const val KEY_COUNT = "count"
         const val KEY_LOG = "log"
+        const val KEY_SESSION = "session"
         const val MAX_ENTRIES = 200
     }
 }

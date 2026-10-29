@@ -4,6 +4,7 @@ import id.sch.mts241alikhlash.cbt.data.model.PaperQuestionDto
 import id.sch.mts241alikhlash.cbt.data.model.SaveAnswerRequest
 import id.sch.mts241alikhlash.cbt.data.model.SavedAnswerAckDto
 import id.sch.mts241alikhlash.cbt.data.model.SavedAnswerDto
+import id.sch.mts241alikhlash.cbt.data.model.SubmitRequest
 import id.sch.mts241alikhlash.cbt.data.model.SubmittedSessionDto
 import retrofit2.http.Body
 import retrofit2.http.GET
@@ -29,6 +30,7 @@ interface ExamApiService {
 
     @POST("student-exams/{sessionId}/submit")
     suspend fun submit(
-        @Path("sessionId") sessionId: String
+        @Path("sessionId") sessionId: String,
+        @Body request: SubmitRequest
     ): SubmittedSessionDto
 }
