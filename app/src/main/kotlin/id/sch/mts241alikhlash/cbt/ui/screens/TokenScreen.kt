@@ -305,7 +305,7 @@ fun TokenScreen(
                 Spacer(modifier = Modifier.height(6.dp))
 
                 Text(
-                    text = "241 Assessment · MTs 241 Al-Ikhlash",
+                    text = "241-exam · MTs 241 Al-Ikhlash",
                     fontSize = 11.sp,
                     fontFamily = DMSansFontFamily,
                     color = TextMuted,

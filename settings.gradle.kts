@@ -13,5 +13,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "exam-cbt"
+rootProject.name = "241-exam"
 include(":app")
