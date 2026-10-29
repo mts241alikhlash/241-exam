@@ -1,5 +1,6 @@
 package id.sch.mts241alikhlash.cbt.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -24,6 +25,7 @@ import androidx.compose.ui.unit.sp
 import id.sch.mts241alikhlash.cbt.data.auth.AuthUser
 import id.sch.mts241alikhlash.cbt.data.model.ExamSummaryDto
 import id.sch.mts241alikhlash.cbt.ui.screens.TokenScreen
+import id.sch.mts241alikhlash.cbt.ui.screens.displayTitle
 import id.sch.mts241alikhlash.cbt.ui.theme.AssessmentTheme
 import id.sch.mts241alikhlash.cbt.ui.theme.BrandBackground
 import id.sch.mts241alikhlash.cbt.ui.theme.BrandNavy
@@ -39,6 +41,7 @@ data class AppRootState(
     val deadline: Long? = null,
     val user: AuthUser? = null,
     val selectedExam: ExamSummaryDto? = null,
+    val activeExam: ExamSummaryDto? = null,
     val starting: Boolean = false,
     val startError: String? = null,
     val notice: String? = null
@@ -55,7 +58,7 @@ fun AssessmentAppRoot(
     onBackToList: () -> Unit = {},
     tokenContent: @Composable (ExamSummaryDto) -> Unit = { exam ->
         TokenScreen(
-            examTitle = exam.title,
+            exam = exam,
             loading = state.starting,
             error = state.startError,
             onBack = onBackToList,
@@ -63,6 +66,10 @@ fun AssessmentAppRoot(
         )
     }
 ) {
+    BackHandler(enabled = state.sessionId == null && state.user != null && state.selectedExam != null) {
+        if (!state.starting) onBackToList()
+    }
+
     AssessmentTheme {
         when {
             !state.restoreComplete -> LoadingScreen()

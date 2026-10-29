@@ -11,6 +11,10 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.aspectRatio
+import id.sch.mts241alikhlash.cbt.ui.components.BrandWatermark
+import androidx.compose.ui.draw.rotate
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -23,8 +27,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.itemsIndexed
+import id.sch.mts241alikhlash.cbt.data.model.PaperQuestionDto
+import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -48,19 +52,27 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import id.sch.mts241alikhlash.cbt.ui.components.ActionButton
+import id.sch.mts241alikhlash.cbt.ui.components.ActionStyle
+import id.sch.mts241alikhlash.cbt.ui.components.AppDialog
+import id.sch.mts241alikhlash.cbt.data.model.ExamSummaryDto
+import id.sch.mts241alikhlash.cbt.ui.components.SectionHeader
+import id.sch.mts241alikhlash.cbt.ui.components.SectionedCard
 import androidx.compose.ui.unit.sp
 import id.sch.mts241alikhlash.cbt.R
 import id.sch.mts241alikhlash.cbt.ui.theme.BorderFocus
@@ -75,7 +87,6 @@ import id.sch.mts241alikhlash.cbt.ui.theme.DoubtfulOrange
 import id.sch.mts241alikhlash.cbt.ui.theme.DoubtfulOrangeLight
 import id.sch.mts241alikhlash.cbt.ui.theme.StatusError
 import id.sch.mts241alikhlash.cbt.ui.theme.StatusSuccess
-import id.sch.mts241alikhlash.cbt.ui.theme.StatusSuccessLight
 import id.sch.mts241alikhlash.cbt.ui.theme.TextMuted
 import id.sch.mts241alikhlash.cbt.ui.theme.TextPrimary
 import id.sch.mts241alikhlash.cbt.ui.theme.TextSecondary
@@ -84,6 +95,7 @@ import id.sch.mts241alikhlash.cbt.ui.theme.TextSecondary
 fun ExamScreen(
     viewModel: ExamViewModel,
     sessionId: String,
+    exam: ExamSummaryDto? = null,
     baseUrl: String,
     imageLoader: coil3.ImageLoader?,
     onFinish: () -> Unit,
@@ -104,6 +116,7 @@ fun ExamScreen(
         onSupervisorExit = onSupervisorExit,
         onSessionLost = onSessionLost,
         sessionId = sessionId,
+        exam = exam,
         baseUrl = baseUrl,
         imageLoader = imageLoader
     )
@@ -123,10 +136,19 @@ fun ExamContent(
     onSupervisorExit: () -> Unit = {},
     onSessionLost: (String) -> Unit = {},
     sessionId: String = "",
+    exam: ExamSummaryDto? = null,
     baseUrl: String = "",
     imageLoader: coil3.ImageLoader? = null
 ) {
     var showConfirmDialog by remember { mutableStateOf(false) }
+    var showQuestionList by remember { mutableStateOf(false) }
+    var resumeNoticeDismissed by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(state.isResumed) {
+        if (state.isResumed) {
+            kotlinx.coroutines.delay(8_000)
+            resumeNoticeDismissed = true
+        }
+    }
 
     if (state.isSubmitted) {
         LaunchedEffect(Unit) {
@@ -145,123 +167,115 @@ fun ExamContent(
     }
 
     if (state.isTimeOver && !state.isSubmitted) {
-        AlertDialog(
-            onDismissRequest = {},
-            title = { Text("Waktu habis") },
-            text = {
-                Text(
-                    state.submitError?.let { "Mengirim jawaban… $it Mencoba lagi." }
-                        ?: "Mengirim jawaban…"
-                )
-            },
-            confirmButton = {
-                if (!state.isSubmitting && state.submitError != null) {
-                    TextButton(onClick = onSubmit) { Text("Coba lagi") }
-                }
+        AppDialog(
+            title = "Waktu habis",
+            onDismiss = {},
+            dismissible = false,
+            footerEnd = if (!state.isSubmitting && state.submitError != null) {
+                { ActionButton(text = "Coba lagi", onClick = onSubmit) }
+            } else {
+                null
             }
-        )
+        ) {
+            Text(
+                text = state.submitError?.let { "Mengirim jawaban… $it Mencoba lagi." }
+                    ?: "Mengirim jawaban…",
+                fontFamily = DMSansFontFamily,
+                fontSize = 13.sp,
+                color = TextPrimary
+            )
+        }
     }
 
     if (showConfirmDialog) {
-        AlertDialog(
-            onDismissRequest = { if (!state.isSubmitting) showConfirmDialog = false },
-            shape = RoundedCornerShape(10.dp),
-            containerColor = BrandSurface,
-            title = {
-                Text(
-                    text = "Kumpulkan Lembar Ujian?",
-                    fontFamily = DMSansFontFamily,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 17.sp,
-                    color = TextPrimary
+        val total = state.questions.size
+        val doubtfulCount = state.doubtfuls.size
+        AppDialog(
+            title = "Kumpulkan Lembar Ujian?",
+            onDismiss = { if (!state.isSubmitting) showConfirmDialog = false },
+            dismissible = !state.isSubmitting,
+            footerStart = {
+                ActionButton(
+                    text = "Periksa Kembali",
+                    style = ActionStyle.Outline,
+                    enabled = !state.isSubmitting,
+                    onClick = { showConfirmDialog = false }
                 )
             },
-            text = {
-                val answered = state.questions.count { q -> state.answers[q.id].isFilled() || !state.drafts[q.id].isNullOrBlank() }
-                val total = state.questions.size
-                val doubtfulCount = state.doubtfuls.size
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text(
-                        text = "Anda telah menjawab $answered dari $total soal.",
-                        fontFamily = DMSansFontFamily,
-                        fontSize = 13.sp,
-                        color = TextPrimary
-                    )
-                    if (doubtfulCount > 0) {
-                        Text(
-                            text = "Terdapat $doubtfulCount soal yang masih ditandai ragu-ragu.",
-                            fontFamily = DMSansFontFamily,
-                            fontSize = 12.sp,
-                            color = DoubtfulOrange
-                        )
-                    }
-                    Text(
-                        text = "Setelah dikumpulkan, jawaban tidak dapat diubah kembali.",
-                        fontFamily = DMSansFontFamily,
-                        fontSize = 12.sp,
-                        color = TextMuted
-                    )
-                    if (state.isSubmitting) {
-                        Text(
-                            text = "Mengirim jawaban…",
-                            fontFamily = DMSansFontFamily,
-                            fontWeight = FontWeight.Medium,
-                            fontSize = 12.sp,
-                            color = TextSecondary
-                        )
-                    }
-                    state.submitError?.let { error ->
-                        Text(
-                            text = error,
-                            fontFamily = DMSansFontFamily,
-                            fontWeight = FontWeight.Medium,
-                            fontSize = 12.sp,
-                            color = StatusError
-                        )
-                    }
-                }
-            },
-            confirmButton = {
-                Button(
+            footerEnd = {
+                ActionButton(
+                    text = "Ya, Kumpulkan",
+                    enabled = !state.isSubmitting,
                     onClick = {
                         showConfirmDialog = false
                         onSubmit()
-                    },
-                    enabled = !state.isSubmitting,
-                    shape = RoundedCornerShape(8.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = BrandNavy)
-                ) {
+                    }
+                )
+            }
+        ) {
+            val answered = state.questions.count { q ->
+                state.answers[q.id].isFilled() || !state.drafts[q.id].isNullOrBlank()
+            }
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(
+                    text = "Anda telah menjawab $answered dari $total soal.",
+                    fontFamily = DMSansFontFamily,
+                    fontSize = 13.sp,
+                    color = TextPrimary
+                )
+                if (doubtfulCount > 0) {
                     Text(
-                        text = "Ya, Kumpulkan",
+                        text = "Terdapat $doubtfulCount soal yang masih ditandai ragu-ragu.",
                         fontFamily = DMSansFontFamily,
-                        fontWeight = FontWeight.SemiBold,
-                        fontSize = 13.sp
+                        fontSize = 12.sp,
+                        color = DoubtfulOrange
                     )
                 }
-            },
-            dismissButton = {
-                TextButton(
-                    onClick = { showConfirmDialog = false },
-                    enabled = !state.isSubmitting
-                ) {
+                Text(
+                    text = "Setelah dikumpulkan, jawaban tidak dapat diubah kembali.",
+                    fontFamily = DMSansFontFamily,
+                    fontSize = 12.sp,
+                    color = TextMuted
+                )
+                if (state.isSubmitting) {
                     Text(
-                        text = "Periksa Kembali",
+                        text = "Mengirim jawaban…",
                         fontFamily = DMSansFontFamily,
                         fontWeight = FontWeight.Medium,
-                        fontSize = 13.sp,
-                        color = TextMuted
+                        fontSize = 12.sp,
+                        color = TextSecondary
+                    )
+                }
+                state.submitError?.let { error ->
+                    Text(
+                        text = error,
+                        fontFamily = DMSansFontFamily,
+                        fontWeight = FontWeight.Medium,
+                        fontSize = 12.sp,
+                        color = StatusError
                     )
                 }
             }
+        }
+    }
+
+    val answeredCount = state.questions.count { q ->
+        state.answers[q.id].isFilled() || !state.drafts[q.id].isNullOrBlank()
+    }
+
+    if (showQuestionList) {
+        QuestionListDialog(
+            state = state,
+            onGoToIndex = {
+                showQuestionList = false
+                onGoToIndex(it)
+            },
+            onDismiss = { showQuestionList = false }
         )
     }
 
     Scaffold(
         topBar = {
-            // At large font scales the fixed 54dp bar cannot hold logo + timer + action;
-            // let it grow and drop the decorative badge instead of clipping the timer/action.
-            val largeFont = LocalDensity.current.fontScale > 1.2f
-            val compactTopBar = largeFont || LocalConfiguration.current.screenWidthDp < 360
             Surface(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -287,22 +301,6 @@ fun ExamContent(
                             modifier = Modifier.height(28.dp),
                             contentScale = ContentScale.Fit
                         )
-                        if (!compactTopBar) {
-                            Box(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(4.dp))
-                                    .background(BrandNavySubtle)
-                                    .padding(horizontal = 6.dp, vertical = 2.dp)
-                            ) {
-                                Text(
-                                    text = "ASSESSMENT",
-                                    fontFamily = DMSansFontFamily,
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 10.sp,
-                                    color = BrandNavy
-                                )
-                            }
-                        }
                     }
 
                     Row(
@@ -312,7 +310,7 @@ fun ExamContent(
                         val minutes = state.remainingSeconds / 60
                         val seconds = state.remainingSeconds % 60
                         Surface(
-                            shape = RoundedCornerShape(6.dp),
+                            shape = RoundedCornerShape(8.dp),
                             color = BrandMuted,
                             border = androidx.compose.foundation.BorderStroke(1.dp, BorderSubtle)
                         ) {
@@ -326,29 +324,15 @@ fun ExamContent(
                             )
                         }
 
-                        Button(
-                            onClick = { showConfirmDialog = true },
-                            // Cannot finish a paper that never loaded, or one already sending.
-                            enabled = state.canSubmit,
-                            colors = ButtonDefaults.buttonColors(containerColor = StatusError),
-                            shape = RoundedCornerShape(6.dp),
-                            modifier = Modifier.heightIn(min = 32.dp),
-                            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = 0.dp)
-                        ) {
-                            Text(
-                                text = if (state.isSubmitting) "Mengirim…" else "Selesai",
-                                fontFamily = DMSansFontFamily,
-                                fontWeight = FontWeight.SemiBold,
-                                fontSize = 12.sp,
-                                maxLines = 1,
-                                softWrap = false
-                            )
-                        }
                     }
                 }
             }
         },
         bottomBar = {
+            Column {
+            if (state.isResumed && !resumeNoticeDismissed) {
+                ResumeNotice(onClose = { resumeNoticeDismissed = true })
+            }
             if (state.questions.isNotEmpty()) {
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
@@ -433,7 +417,7 @@ fun ExamContent(
                                 onClick = { onGoToIndex(state.currentIndex - 1) },
                                 modifier = Modifier
                                     .weight(1f)
-                                    .height(38.dp)
+                                    .height(40.dp)
                             )
                             ExamDoubtButton(
                                 isDoubt = isDoubt,
@@ -441,7 +425,7 @@ fun ExamContent(
                                 onClick = { onToggleDoubtful(currentQ.id) },
                                 modifier = Modifier
                                     .weight(1f)
-                                    .height(38.dp)
+                                    .height(40.dp)
                             )
                             ExamPrimaryAction(
                                 label = primaryLabel,
@@ -449,12 +433,13 @@ fun ExamContent(
                                 containerColor = primaryColor,
                                 onClick = onPrimaryClick,
                                 modifier = Modifier
-                                    .weight(1.2f)
-                                    .height(38.dp)
+                                    .weight(1f)
+                                    .height(40.dp)
                             )
                         }
                     }
                 }
+            }
             }
         }
     ) { padding ->
@@ -498,11 +483,22 @@ fun ExamContent(
             else -> {
                 val currentQ = state.questions[state.currentIndex]
 
-                Column(
+                Box(
                     modifier = Modifier
                         .fillMaxSize()
                         .background(BrandBackground)
                         .padding(padding)
+                ) {
+                BrandWatermark(
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .offset(x = 120.dp, y = 140.dp)
+                        .width(380.dp)
+                        .rotate(-24f)
+                )
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
                         .padding(horizontal = 16.dp, vertical = 12.dp)
                 ) {
                     state.deliveryWarning?.let { warning ->
@@ -514,154 +510,49 @@ fun ExamContent(
                             modifier = Modifier.padding(bottom = 8.dp)
                         )
                     }
-                    if (state.isResumed) {
-                        Surface(
-                            shape = RoundedCornerShape(8.dp),
-                            color = DoubtfulOrangeLight,
-                            border = androidx.compose.foundation.BorderStroke(1.dp, DoubtfulOrange),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(bottom = 10.dp)
-                        ) {
-                            Text(
-                                text = "Ujian dilanjutkan. Sisa waktu mengikuti jam sebenarnya.",
-                                fontFamily = DMSansFontFamily,
-                                fontWeight = FontWeight.Medium,
-                                fontSize = 12.sp,
-                                color = DoubtfulOrange,
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
-                            )
-                        }
-                    }
+                    QuestionDetailCard(
+                        state = state,
+                        question = currentQ,
+                        answeredCount = answeredCount,
+                        exam = exam,
+                        onOpenList = { showQuestionList = true },
+                        onSubmit = { showConfirmDialog = true }
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
 
-                    LazyRow(
+                    LazyColumn(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(bottom = 12.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            .weight(1f, fill = false)
                     ) {
-                        itemsIndexed(state.questions) { index, q ->
-                            val isCurrent = index == state.currentIndex
-                            val isAnswered = state.answers[q.id].isFilled() || !state.drafts[q.id].isNullOrBlank()
-                            val isDoubtItem = state.doubtfuls.contains(q.id)
-
-                            val bgColor = when {
-                                isCurrent -> BrandNavy
-                                isDoubtItem -> DoubtfulOrange
-                                isAnswered -> StatusSuccess
-                                else -> BrandSurface
-                            }
-
-                            val textColor = when {
-                                isCurrent || isDoubtItem || isAnswered -> Color.White
-                                else -> TextSecondary
-                            }
-
-                            Box(
-                                modifier = Modifier
-                                    .size(34.dp)
-                                    .clip(RoundedCornerShape(6.dp))
-                                    .background(bgColor)
-                                    .border(
-                                        1.dp,
-                                        if (isCurrent) BrandNavy else BorderSubtle,
-                                        RoundedCornerShape(6.dp)
+                        item {
+                            SectionedCard {
+                                SectionHeader("SOAL ${state.currentIndex + 1}")
+                                Column(modifier = Modifier.padding(16.dp)) {
+                                    HtmlContent(
+                                        html = currentQ.bodyHtml,
+                                        sessionId = sessionId,
+                                        baseUrl = baseUrl,
+                                        imageLoader = imageLoader
                                     )
-                                    .clickable { onGoToIndex(index) },
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = "${index + 1}",
-                                    fontFamily = DMSansFontFamily,
-                                    fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Medium,
-                                    fontSize = 12.sp,
-                                    color = textColor
-                                )
-                            }
-                        }
-                    }
-
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .weight(1f)
-                            .border(1.dp, BorderSubtle, RoundedCornerShape(10.dp)),
-                        colors = CardDefaults.cardColors(containerColor = BrandSurface),
-                        shape = RoundedCornerShape(10.dp),
-                        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
-                    ) {
-                        LazyColumn(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(18.dp)
-                        ) {
-                            item {
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(bottom = 14.dp),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Surface(
-                                        shape = RoundedCornerShape(6.dp),
-                                        color = BrandMuted,
-                                        border = androidx.compose.foundation.BorderStroke(1.dp, BorderSubtle),
-                                        modifier = Modifier.weight(1f, fill = false)
-                                    ) {
-                                        Text(
-                                            text = "Soal Nomor ${state.currentIndex + 1} dari ${state.questions.size}",
-                                            fontFamily = DMSansFontFamily,
-                                            fontWeight = FontWeight.SemiBold,
-                                            fontSize = 12.sp,
-                                            color = TextPrimary,
-                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                                        )
-                                    }
-
-                                    Surface(
-                                        shape = RoundedCornerShape(6.dp),
-                                        color = StatusSuccessLight
-                                    ) {
-                                        Text(
-                                            text = questionTypeLabel(currentQ.type),
-                                            fontFamily = DMSansFontFamily,
-                                            fontWeight = FontWeight.SemiBold,
-                                            fontSize = 11.sp,
-                                            maxLines = 1,
-                                            softWrap = false,
-                                            overflow = TextOverflow.Ellipsis,
-                                            color = StatusSuccess,
-                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
-                                        )
-                                    }
+                                }
+                                SectionHeader("JAWABAN", divider = true)
+                                Column(modifier = Modifier.padding(16.dp)) {
+                                    QuestionAnswerInput(
+                                        question = currentQ,
+                                        answer = state.answers[currentQ.id],
+                                        draft = state.drafts[currentQ.id],
+                                        enabled = state.canAnswer,
+                                        images = ImageContext(sessionId, baseUrl, imageLoader),
+                                        onAnswer = { onAnswer(currentQ.id, it) },
+                                        onToggleKey = { onToggleKey(currentQ.id, it) },
+                                        onTextChange = { onTextChange(currentQ.id, it) }
+                                    )
                                 }
                             }
-
-                            item {
-                                HtmlContent(
-                                    html = currentQ.bodyHtml,
-                                    sessionId = sessionId,
-                                    baseUrl = baseUrl,
-                                    imageLoader = imageLoader,
-                                    modifier = Modifier.padding(bottom = 20.dp)
-                                )
-                            }
-
-                            item {
-                                QuestionAnswerInput(
-                                    question = currentQ,
-                                    answer = state.answers[currentQ.id],
-                                    draft = state.drafts[currentQ.id],
-                                    enabled = state.canAnswer,
-                                    images = ImageContext(sessionId, baseUrl, imageLoader),
-                                    onAnswer = { onAnswer(currentQ.id, it) },
-                                    onToggleKey = { onToggleKey(currentQ.id, it) },
-                                    onTextChange = { onTextChange(currentQ.id, it) }
-                                )
-                            }
                         }
                     }
+                }
                 }
             }
         }
@@ -805,7 +696,7 @@ private fun ExamDoubtButton(
             text = "Ragu-ragu",
             fontFamily = DMSansFontFamily,
             fontWeight = FontWeight.Medium,
-            fontSize = 12.sp,
+            fontSize = 13.sp,
             color = if (isDoubt) DoubtfulOrange else TextSecondary,
             maxLines = 1,
             softWrap = false,
@@ -841,11 +732,295 @@ private fun ExamPrimaryAction(
         Text(
             text = label,
             fontFamily = DMSansFontFamily,
-            fontWeight = FontWeight.SemiBold,
+            fontWeight = FontWeight.Medium,
             fontSize = 13.sp,
             maxLines = 2,
             softWrap = true,
             overflow = TextOverflow.Ellipsis
         )
+    }
+}
+
+@Composable
+private fun QuestionGridGlyph() {
+    androidx.compose.foundation.Canvas(modifier = Modifier.size(16.dp)) {
+        val cell = size.width * 0.38f
+        val gap = size.width - cell * 2
+        for (row in 0..1) {
+            for (col in 0..1) {
+                drawRoundRect(
+                    color = BrandNavy,
+                    topLeft = androidx.compose.ui.geometry.Offset(col * (cell + gap), row * (cell + gap)),
+                    size = androidx.compose.ui.geometry.Size(cell, cell),
+                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(cell * 0.25f)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun QuestionListDialog(
+    state: ExamUiState,
+    onGoToIndex: (Int) -> Unit,
+    onDismiss: () -> Unit
+) {
+    fun answered(q: PaperQuestionDto) = state.answers[q.id].isFilled() || !state.drafts[q.id].isNullOrBlank()
+    val answeredCount = state.questions.count(::answered)
+    val doubtCount = state.questions.count { state.doubtfuls.contains(it.id) }
+    val groups = state.questions.withIndex().groupBy { it.value.type }
+
+    AppDialog(
+        title = "Daftar Soal",
+        onDismiss = onDismiss,
+        footerContent = {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                LegendDot(BrandNavy, "Sekarang")
+                LegendDot(StatusSuccess, "Terjawab $answeredCount")
+                LegendDot(DoubtfulOrange, "Ragu-ragu $doubtCount")
+            }
+        }
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            groups.forEach { (type, items) ->
+                val shape = RoundedCornerShape(10.dp)
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(BrandSurface, shape)
+                        .border(1.dp, BorderSubtle, shape)
+                        .clip(shape)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(TextPrimary.copy(alpha = 0.03f))
+                            .padding(horizontal = 12.dp, vertical = 6.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = questionTypeLabel(type),
+                            fontFamily = DMSansFontFamily,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 11.sp,
+                            letterSpacing = 1.2.sp,
+                            color = TextPrimary.copy(alpha = 0.78f)
+                        )
+                        Text(
+                            text = "${items.count { answered(it.value) }} dari ${items.size}",
+                            fontFamily = DMSansFontFamily,
+                            fontSize = 12.sp,
+                            color = TextMuted
+                        )
+                    }
+                    Box(Modifier.fillMaxWidth().height(1.dp).background(BorderSubtle))
+                    Column(
+                        modifier = Modifier.padding(10.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        items.chunked(10).forEach { rowItems ->
+                            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                rowItems.forEach { (index, q) ->
+                                    val isCurrent = index == state.currentIndex
+                                    val isAnswered = answered(q)
+                                    val isDoubtItem = state.doubtfuls.contains(q.id)
+                                    val bgColor = when {
+                                        isCurrent -> BrandNavy
+                                        isDoubtItem -> DoubtfulOrange
+                                        isAnswered -> StatusSuccess
+                                        else -> BrandSurface
+                                    }
+                                    val textColor =
+                                        if (isCurrent || isDoubtItem || isAnswered) Color.White else TextSecondary
+                                    Box(
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .aspectRatio(1f)
+                                            .clip(RoundedCornerShape(6.dp))
+                                            .background(bgColor)
+                                            .border(1.dp, if (isCurrent) BrandNavy else BorderSubtle, RoundedCornerShape(6.dp))
+                                            .clickable { onGoToIndex(index) },
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            text = "${index + 1}",
+                                            fontFamily = DMSansFontFamily,
+                                            fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Medium,
+                                            fontSize = 12.sp,
+                                            maxLines = 1,
+                                            softWrap = false,
+                                            color = textColor
+                                        )
+                                    }
+                                }
+                                repeat(10 - rowItems.size) { Spacer(modifier = Modifier.weight(1f)) }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun LegendDot(color: Color, label: String) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Box(
+            modifier = Modifier
+                .size(10.dp)
+                .background(color, RoundedCornerShape(3.dp))
+        )
+        Spacer(modifier = Modifier.width(5.dp))
+        Text(
+            text = label,
+            fontFamily = DMSansFontFamily,
+            fontSize = 11.sp,
+            color = TextMuted
+        )
+    }
+}
+
+@Composable
+private fun QuestionDetailCard(
+    state: ExamUiState,
+    question: PaperQuestionDto,
+    answeredCount: Int,
+    exam: ExamSummaryDto?,
+    onOpenList: () -> Unit,
+    onSubmit: () -> Unit
+) {
+    val shape = RoundedCornerShape(10.dp)
+    val isDoubt = state.doubtfuls.contains(question.id)
+    val isAnswered = state.answers[question.id].isFilled() || !state.drafts[question.id].isNullOrBlank()
+    val status = when {
+        isDoubt -> "Ragu-ragu"
+        isAnswered -> "Sudah dijawab"
+        else -> "Belum dijawab"
+    }
+    val statusColor = when {
+        isDoubt -> DoubtfulOrange
+        isAnswered -> StatusSuccess
+        else -> TextMuted
+    }
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(BrandSurface, shape)
+            .border(1.dp, BorderSubtle, shape)
+            .clip(shape)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(TextPrimary.copy(alpha = 0.03f))
+                .padding(start = 16.dp, end = 8.dp, top = 6.dp, bottom = 6.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "DETAIL SOAL",
+                fontFamily = DMSansFontFamily,
+                fontWeight = FontWeight.Bold,
+                fontSize = 11.sp,
+                letterSpacing = 1.2.sp,
+                color = TextPrimary.copy(alpha = 0.78f)
+            )
+            Row(
+                modifier = Modifier
+                    .height(32.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(BrandSurface)
+                    .border(1.dp, BorderSubtle, RoundedCornerShape(8.dp))
+                    .clickable(onClick = onOpenList)
+                    .padding(horizontal = 10.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                QuestionGridGlyph()
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "Daftar Soal",
+                    fontFamily = DMSansFontFamily,
+                    fontWeight = FontWeight.Medium,
+                    fontSize = 13.sp,
+                    color = BrandNavy
+                )
+            }
+        }
+        Box(Modifier.fillMaxWidth().height(1.dp).background(BorderSubtle))
+        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+            exam?.let { DetailRow("Ujian", it.displayTitle(), strong = true) }
+            DetailRow(
+                "Jenis soal",
+                questionTypeLabel(question.type).lowercase().replaceFirstChar { it.uppercase() },
+                strong = true
+            )
+            Row(modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp)) {
+                Text(
+                    text = "Status",
+                    fontFamily = DMSansFontFamily,
+                    fontSize = 12.sp,
+                    color = TextMuted,
+                    modifier = Modifier.width(88.dp)
+                )
+                Text(
+                    text = status,
+                    fontFamily = DMSansFontFamily,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 13.sp,
+                    color = statusColor,
+                    modifier = Modifier.weight(1f)
+                )
+            }
+            DetailRow("Terjawab", "$answeredCount dari ${state.questions.size} soal")
+            Spacer(modifier = Modifier.height(10.dp))
+            ActionButton(
+                text = if (state.isSubmitting) "Mengirim…" else "Selesai & Kumpulkan",
+                onClick = onSubmit,
+                style = ActionStyle.Outline,
+                enabled = state.canSubmit,
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
+    }
+}
+
+@Composable
+private fun ResumeNotice(onClose: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 8.dp, vertical = 6.dp)
+            .background(DoubtfulOrangeLight, RoundedCornerShape(8.dp))
+            .border(1.dp, DoubtfulOrange, RoundedCornerShape(8.dp))
+            .padding(start = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = "Ujian dilanjutkan. Sisa waktu mengikuti jam sebenarnya.",
+            fontFamily = DMSansFontFamily,
+            fontWeight = FontWeight.Medium,
+            fontSize = 12.sp,
+            color = DoubtfulOrange,
+            modifier = Modifier.weight(1f)
+        )
+        Box(
+            modifier = Modifier
+                .size(40.dp)
+                .clickable(onClick = onClose)
+                .semantics { contentDescription = "Tutup pemberitahuan" },
+            contentAlignment = Alignment.Center
+        ) {
+            androidx.compose.foundation.Canvas(modifier = Modifier.size(12.dp)) {
+                val stroke = 1.8.dp.toPx()
+                drawLine(DoubtfulOrange, androidx.compose.ui.geometry.Offset(0f, 0f), androidx.compose.ui.geometry.Offset(size.width, size.height), stroke, androidx.compose.ui.graphics.StrokeCap.Round)
+                drawLine(DoubtfulOrange, androidx.compose.ui.geometry.Offset(size.width, 0f), androidx.compose.ui.geometry.Offset(0f, size.height), stroke, androidx.compose.ui.graphics.StrokeCap.Round)
+            }
+        }
     }
 }

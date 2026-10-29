@@ -4,23 +4,23 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -30,24 +30,41 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import id.sch.mts241alikhlash.cbt.BuildConfig
 import id.sch.mts241alikhlash.cbt.R
-import id.sch.mts241alikhlash.cbt.ui.theme.BorderSubtle
-import id.sch.mts241alikhlash.cbt.ui.theme.BrandBackground
-import id.sch.mts241alikhlash.cbt.ui.theme.BrandNavy
-import id.sch.mts241alikhlash.cbt.ui.theme.BrandSurface
+import id.sch.mts241alikhlash.cbt.ui.components.BrandCardOverlap
+import id.sch.mts241alikhlash.cbt.ui.components.BrandEmblem
+import id.sch.mts241alikhlash.cbt.ui.components.BrandHero
+import id.sch.mts241alikhlash.cbt.ui.components.BrandWatermark
+import id.sch.mts241alikhlash.cbt.ui.components.FloatingTextField
+import id.sch.mts241alikhlash.cbt.ui.components.pullUp
+import id.sch.mts241alikhlash.cbt.ui.components.PrimaryButton
 import id.sch.mts241alikhlash.cbt.ui.theme.DMSansFontFamily
-import id.sch.mts241alikhlash.cbt.ui.theme.StatusError
-import id.sch.mts241alikhlash.cbt.ui.theme.TextMuted
-import id.sch.mts241alikhlash.cbt.ui.theme.TextPrimary
+import id.sch.mts241alikhlash.cbt.ui.theme.WebTokens
+
+private val HeroMinHeight = 232.dp
+private const val HeroShare = 0.36f
 
 @Composable
 fun LoginScreen(viewModel: LoginViewModel) {
@@ -55,121 +72,160 @@ fun LoginScreen(viewModel: LoginViewModel) {
     var identifier by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(BrandBackground)
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 24.dp, vertical = 28.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Image(
-            painter = painterResource(id = R.drawable.logo_name),
-            contentDescription = "Logo MTs 241 Al-Ikhlash",
-            modifier = Modifier.height(48.dp),
-            contentScale = ContentScale.Fit
-        )
-        Spacer(modifier = Modifier.height(24.dp))
-        Card(
+    BoxWithConstraints(modifier = Modifier.fillMaxSize().background(WebTokens.Background)) {
+        val screenHeight = maxHeight
+        BrandWatermark(
             modifier = Modifier
-                .fillMaxWidth()
-                .border(1.dp, BorderSubtle, RoundedCornerShape(10.dp)),
-            shape = RoundedCornerShape(10.dp),
-            colors = CardDefaults.cardColors(containerColor = BrandSurface),
-            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+                .align(Alignment.BottomEnd)
+                .offset(x = maxWidth * 0.28f, y = 110.dp)
+                .width(maxWidth * 1.1f)
+                .rotate(-24f)
+        )
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .heightIn(min = screenHeight),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.SpaceBetween
         ) {
-            Column(
-                modifier = Modifier.padding(24.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Text(
-                    text = "Masuk",
-                    fontSize = 22.sp,
-                    fontWeight = FontWeight.Bold,
-                    fontFamily = DMSansFontFamily,
-                    color = TextPrimary
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = "Gunakan akun siswa 241 Al-Ikhlash.",
-                    fontSize = 13.sp,
-                    fontFamily = DMSansFontFamily,
-                    color = TextMuted,
-                    textAlign = TextAlign.Center
-                )
-                Spacer(modifier = Modifier.height(20.dp))
-                OutlinedTextField(
-                    value = identifier,
-                    onValueChange = { identifier = it },
-                    label = { Text("NIS / Email", fontFamily = DMSansFontFamily, fontSize = 13.sp) },
-                    singleLine = true,
-                    enabled = !state.loading,
-                    shape = RoundedCornerShape(8.dp),
-                    modifier = Modifier.fillMaxWidth(),
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
-                    colors = fieldColors()
-                )
-                Spacer(modifier = Modifier.height(12.dp))
-                OutlinedTextField(
-                    value = password,
-                    onValueChange = { password = it },
-                    label = { Text("Kata sandi", fontFamily = DMSansFontFamily, fontSize = 13.sp) },
-                    singleLine = true,
-                    enabled = !state.loading,
-                    visualTransformation = PasswordVisualTransformation(),
-                    shape = RoundedCornerShape(8.dp),
-                    modifier = Modifier.fillMaxWidth(),
-                    keyboardOptions = KeyboardOptions(
-                        keyboardType = KeyboardType.Password,
-                        imeAction = ImeAction.Go
-                    ),
-                    colors = fieldColors()
-                )
-                state.error?.let { message ->
-                    Spacer(modifier = Modifier.height(8.dp))
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                BrandHero(title = "241-exam", tagline = "SISTEM UJIAN DIGITAL", height = (screenHeight * HeroShare).coerceAtLeast(HeroMinHeight))
+                Column(
+                    modifier = Modifier
+                        .pullUp(BrandCardOverlap)
+                        .padding(horizontal = 20.dp)
+                        .fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    LoginCard(
+                        loading = state.loading,
+                        error = state.error,
+                        identifier = identifier,
+                        onIdentifier = { identifier = it },
+                        password = password,
+                        onPassword = { password = it },
+                        onSubmit = { viewModel.submit(identifier, password) }
+                    )
+                    Spacer(modifier = Modifier.height(18.dp))
                     Text(
-                        text = message,
-                        color = StatusError,
+                        text = buildAnnotatedString {
+                            withStyle(SpanStyle(fontWeight = FontWeight.Medium, color = WebTokens.Foreground)) {
+                                append("Kendala saat masuk? ")
+                            }
+                            append("Hubungi pengawas ujian.")
+                        },
                         fontSize = 12.sp,
                         fontFamily = DMSansFontFamily,
-                        modifier = Modifier.fillMaxWidth()
+                        color = WebTokens.MutedForeground,
+                        maxLines = 1
                     )
                 }
-                Spacer(modifier = Modifier.height(18.dp))
-                Button(
-                    onClick = { viewModel.submit(identifier, password) },
-                    enabled = !state.loading,
-                    shape = RoundedCornerShape(8.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = BrandNavy),
+            }
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.padding(top = 24.dp, bottom = 20.dp)
+            ) {
+                Image(
+                    painter = painterResource(id = R.drawable.logo_name),
+                    contentDescription = "Logo MTs 241 Al-Ikhlash",
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .height(44.dp)
-                ) {
-                    if (state.loading) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.height(20.dp),
-                            strokeWidth = 2.dp,
-                            color = BrandSurface
-                        )
-                    } else {
-                        Text(
-                            text = "Masuk",
-                            fontSize = 14.sp,
-                            fontFamily = DMSansFontFamily,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                    }
-                }
+                        .height(34.dp),
+                    contentScale = ContentScale.Fit
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "Versi ${BuildConfig.VERSION_NAME}",
+                    fontSize = 11.sp,
+                    fontFamily = DMSansFontFamily,
+                    color = WebTokens.MutedForeground.copy(alpha = 0.8f)
+                )
             }
         }
     }
 }
 
 @Composable
-private fun fieldColors() = OutlinedTextFieldDefaults.colors(
-    focusedBorderColor = BrandNavy,
-    focusedLabelColor = BrandNavy,
-    unfocusedBorderColor = BorderSubtle,
-    errorBorderColor = StatusError
-)
+private fun LoginCard(
+    loading: Boolean,
+    error: String?,
+    identifier: String,
+    onIdentifier: (String) -> Unit,
+    password: String,
+    onPassword: (String) -> Unit,
+    onSubmit: () -> Unit
+) {
+    val shape = RoundedCornerShape(WebTokens.Radius + 2.dp)
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .drawBehind {
+                val radius = CornerRadius((WebTokens.Radius + 2.dp).toPx())
+                drawRoundRect(WebTokens.Card, cornerRadius = radius)
+                drawRoundRect(WebTokens.Border, cornerRadius = radius, style = Stroke(1.dp.toPx()))
+            },
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        BrandEmblem()
+        Column(
+            modifier = Modifier.padding(start = 24.dp, end = 24.dp, bottom = 24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                text = "Masuk ke Ujian",
+                fontSize = 22.sp,
+                fontWeight = FontWeight.SemiBold,
+                fontFamily = DMSansFontFamily,
+                letterSpacing = (-0.4).sp,
+                color = WebTokens.Foreground
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = "Gunakan akun siswa yang terdaftar di MTs 241 Al-Ikhlash.",
+                fontSize = 13.sp,
+                fontFamily = DMSansFontFamily,
+                color = WebTokens.MutedForeground,
+                textAlign = TextAlign.Center
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+            FloatingTextField(
+                value = identifier,
+                onValueChange = onIdentifier,
+                label = "NIS",
+                enabled = !loading,
+                modifier = Modifier.fillMaxWidth(),
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next)
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            FloatingTextField(
+                value = password,
+                onValueChange = onPassword,
+                label = "Kata sandi",
+                enabled = !loading,
+                password = true,
+                modifier = Modifier.fillMaxWidth(),
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Password,
+                    imeAction = ImeAction.Go
+                )
+            )
+            error?.let { message ->
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = message,
+                    color = WebTokens.Destructive,
+                    fontSize = 12.sp,
+                    fontFamily = DMSansFontFamily,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+            Spacer(modifier = Modifier.height(18.dp))
+            PrimaryButton(
+                text = "Masuk",
+                onClick = onSubmit,
+                enabled = !loading,
+                loading = loading
+            )
+        }
+    }
+}

@@ -8,7 +8,8 @@ package id.sch.mts241alikhlash.cbt.data.session
  * compare-and-clear ([SessionRepository.finishIfCurrent]) so a teardown that was
  * already in flight when a new exam started cannot erase the new session.
  *
- * Returns true when this call actually ended the session.
+ * Returns true when the session is ended, whether by this call or earlier by a confirmed
+ * submit; false when another session is now persisted.
  */
 suspend fun endExamSession(
     sessionRepository: SessionRepository,
@@ -21,8 +22,9 @@ suspend fun endExamSession(
         return false
     }
 
-    val ended = sessionRepository.finishIfCurrent(sessionId)
-    if (!ended) return false
+    val current = sessionRepository.current()
+    if (current != null && current != sessionId) return false
+    sessionRepository.finishIfCurrent(sessionId)
 
     runCatching { clearQuestions(sessionId) }
     return true

@@ -15,7 +15,8 @@ import id.sch.mts241alikhlash.cbt.data.auth.SupervisorResult
 import id.sch.mts241alikhlash.cbt.data.remote.userMessage
 import id.sch.mts241alikhlash.cbt.data.session.RestoreOutcome
 import id.sch.mts241alikhlash.cbt.data.session.startExamSession
-import id.sch.mts241alikhlash.cbt.ui.screens.ExamListScreen
+import id.sch.mts241alikhlash.cbt.ui.screens.HomeScreen
+import id.sch.mts241alikhlash.cbt.ui.screens.ProfileViewModel
 import id.sch.mts241alikhlash.cbt.ui.screens.ExamListViewModel
 import id.sch.mts241alikhlash.cbt.ui.screens.LoginScreen
 import id.sch.mts241alikhlash.cbt.ui.screens.LoginViewModel
@@ -69,10 +70,12 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        window.setFlags(
-            WindowManager.LayoutParams.FLAG_SECURE,
-            WindowManager.LayoutParams.FLAG_SECURE
-        )
+        if (!BuildConfig.DEBUG) {
+            window.setFlags(
+                WindowManager.LayoutParams.FLAG_SECURE,
+                WindowManager.LayoutParams.FLAG_SECURE
+            )
+        }
 
         val app = application as CBTApplication
         violations = ViolationStore(this)
@@ -135,6 +138,17 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
+            LaunchedEffect(appState.sessionId) {
+                val running = appState.sessionId
+                if (running != null && appState.activeExam == null) {
+                    val exam = runCatching { app.catalogRepository.listExams() }.getOrNull()
+                        ?.firstOrNull { it.sessionId == running }
+                    if (exam != null && appState.sessionId == running) {
+                        appState = appState.copy(activeExam = exam)
+                    }
+                }
+            }
+
             AssessmentAppRoot(
                 state = appState,
                 onRetryRestore = {
@@ -174,6 +188,7 @@ class MainActivity : ComponentActivity() {
                             appState = appState.copy(
                                 starting = false,
                                 selectedExam = null,
+                                activeExam = exam,
                                 sessionId = started.getOrThrow().sessionId,
                                 deadline = deadline
                             )
@@ -202,9 +217,18 @@ class MainActivity : ComponentActivity() {
                             initializer { ExamListViewModel(app.catalogRepository) }
                         }
                     )
-                    ExamListScreen(
-                        studentName = appState.user?.name.orEmpty(),
-                        viewModel = listViewModel,
+                    val profileViewModel = viewModel<ProfileViewModel>(
+                        key = "profile-${appState.user?.id}",
+                        factory = viewModelFactory {
+                            initializer {
+                                ProfileViewModel(app.profileRepository, appState.user?.name.orEmpty())
+                            }
+                        }
+                    )
+                    HomeScreen(
+                        userName = appState.user?.name.orEmpty(),
+                        listViewModel = listViewModel,
+                        profileViewModel = profileViewModel,
                         notice = appState.notice,
                         onSelect = { appState = appState.copy(selectedExam = it, startError = null, notice = null) },
                         onLogout = {
@@ -244,6 +268,7 @@ class MainActivity : ComponentActivity() {
                     ExamScreen(
                         viewModel = viewModel,
                         sessionId = sessionId,
+                        exam = appState.activeExam,
                         baseUrl = BuildConfig.BASE_URL,
                         imageLoader = app.imageLoader,
                         onSupervisorExit = { showSupervisorExit = true },

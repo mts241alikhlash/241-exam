@@ -39,6 +39,7 @@ class CBTApplication : Application() {
         private set
 
     lateinit var catalogRepository: ExamCatalogRepository
+    lateinit var profileRepository: id.sch.mts241alikhlash.cbt.data.repository.StudentProfileRepository
         private set
 
     lateinit var imageLoader: coil3.ImageLoader
@@ -113,6 +114,9 @@ class CBTApplication : Application() {
         catalogRepository = ExamCatalogRepository(
             api = retrofit.create(ExamCatalogApiService::class.java),
             deviceId = { deviceId() }
+        )
+        profileRepository = id.sch.mts241alikhlash.cbt.data.repository.StudentProfileRepository(
+            retrofit.create(id.sch.mts241alikhlash.cbt.data.remote.StudentApiService::class.java)
         )
         val database = ExamDatabase.getInstance(this)
 
