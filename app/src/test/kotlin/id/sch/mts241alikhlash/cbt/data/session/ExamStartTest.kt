@@ -36,6 +36,29 @@ class ExamStartTest {
     }
 
     @Test
+    fun startExamSession_pulls_the_server_answers_for_the_new_session() = runTest {
+        val sessions = SessionRepository(MemorySessionStore(), now = { 1_000L })
+        val catalog = ExamCatalogRepository(Api { StartedSessionDto("s1", 65_000L, 5_000L) }, { "device-1" }, now = { 1_000L })
+        val pulled = mutableListOf<String>()
+
+        startExamSession(catalog, sessions, "e1", "ABC") { pulled += it }
+
+        assertEquals(listOf("s1"), pulled)
+        assertEquals("s1", sessions.current())
+    }
+
+    @Test
+    fun startExamSession_still_starts_when_the_pull_fails() = runTest {
+        val sessions = SessionRepository(MemorySessionStore(), now = { 1_000L })
+        val catalog = ExamCatalogRepository(Api { StartedSessionDto("s1", 65_000L, 5_000L) }, { "device-1" }, now = { 1_000L })
+
+        val started = startExamSession(catalog, sessions, "e1", "ABC") { throw IOException("offline") }
+
+        assertEquals("s1", started.sessionId)
+        assertEquals("s1", sessions.current())
+    }
+
+    @Test
     fun startExamSession_persists_nothing_when_server_refuses() = runTest {
         val sessions = SessionRepository(MemorySessionStore())
         val catalog = ExamCatalogRepository(Api { throw IOException("offline") }, { "device-1" })

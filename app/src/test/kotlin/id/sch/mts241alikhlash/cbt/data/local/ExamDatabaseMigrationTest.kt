@@ -103,6 +103,50 @@ class ExamDatabaseMigrationTest {
         db.close()
     }
 
+    @Test
+    fun `migration 2 to 3 keeps unsynced answers, clears the rest and adds the points column`() {
+        helper.createDatabase(TEST_DB, 2).apply {
+            execSQL(
+                "INSERT INTO cached_answers " +
+                    "(questionId, sessionId, answer, isDoubtful, isSynced, updatedAt) " +
+                    "VALUES ('q1', 's1', 'A', 0, 0, 0)"
+            )
+            execSQL(
+                "INSERT INTO cached_answers " +
+                    "(questionId, sessionId, answer, isDoubtful, isSynced, updatedAt) " +
+                    "VALUES ('q2', 's1', 'B', 0, 1, 0)"
+            )
+            execSQL(
+                "INSERT INTO cached_questions " +
+                    "(sessionId, id, number, type, bodyHtml, choicesJson, cachedAt) " +
+                    "VALUES ('s1', 'q1', 1, 'multiple_choice', '<p>x</p>', '[\"A\"]', 0)"
+            )
+            close()
+        }
+
+        val db = helper.runMigrationsAndValidate(TEST_DB, 3, true, ExamDatabase.MIGRATION_2_3)
+
+        db.query("SELECT questionId FROM cached_answers").use { cursor ->
+            assertTrue(cursor.moveToFirst())
+            assertEquals("q1", cursor.getString(0))
+            assertEquals(false, cursor.moveToNext())
+        }
+        db.query("SELECT COUNT(*) FROM cached_questions").use { cursor ->
+            cursor.moveToFirst()
+            assertEquals(0, cursor.getInt(0))
+        }
+        db.execSQL(
+            "INSERT INTO cached_questions " +
+                "(sessionId, id, number, type, bodyHtml, points, choicesJson, cachedAt) " +
+                "VALUES ('s1', 'q1', 1, 'MULTIPLE_CHOICE', '<p>x</p>', 2.5, NULL, 0)"
+        )
+        db.query("SELECT points FROM cached_questions").use { cursor ->
+            cursor.moveToFirst()
+            assertEquals(2.5, cursor.getDouble(0), 0.0)
+        }
+        db.close()
+    }
+
     private companion object {
         const val TEST_DB = "migration-test"
         const val SCHEMA_DIR = "id.sch.mts241alikhlash.cbt.data.local.ExamDatabase"

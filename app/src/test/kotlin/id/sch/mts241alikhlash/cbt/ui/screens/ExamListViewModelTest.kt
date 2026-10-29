@@ -73,3 +73,31 @@ class ExamListViewModelTest {
         assertFalse(exam("d", "FINISHED").isSelectable())
     }
 }
+
+class ExamStatusLabelTest {
+    private val zone = java.util.TimeZone.getTimeZone("Asia/Jakarta")
+
+    @org.junit.Test
+    fun upcoming_shows_the_local_opening_time() {
+        val label = examStatusLabel("UPCOMING", "2026-11-02T01:00:00.000Z", zone)
+        org.junit.Assert.assertTrue(label, label.startsWith("Dibuka "))
+        org.junit.Assert.assertTrue(label, label.contains("08.00"))
+        org.junit.Assert.assertTrue(label, label.contains("2026"))
+    }
+
+    @org.junit.Test
+    fun in_progress_invites_the_student_to_continue() {
+        org.junit.Assert.assertEquals("Sedang berlangsung · Lanjutkan", examStatusLabel("IN_PROGRESS", "x", zone))
+    }
+
+    @org.junit.Test
+    fun open_and_finished_keep_their_labels() {
+        org.junit.Assert.assertEquals("Dibuka · Mulai", examStatusLabel("OPEN", "x", zone))
+        org.junit.Assert.assertEquals("Selesai", examStatusLabel("FINISHED", "x", zone))
+    }
+
+    @org.junit.Test
+    fun an_unreadable_start_time_falls_back_to_the_plain_label() {
+        org.junit.Assert.assertEquals("Belum dibuka", examStatusLabel("UPCOMING", "bukan tanggal", zone))
+    }
+}

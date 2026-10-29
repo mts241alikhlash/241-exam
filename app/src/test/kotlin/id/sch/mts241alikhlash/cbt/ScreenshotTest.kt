@@ -1,11 +1,13 @@
 package id.sch.mts241alikhlash.cbt
 
+import id.sch.mts241alikhlash.cbt.data.model.AnswerPayload
+import id.sch.mts241alikhlash.cbt.choices
 import androidx.compose.runtime.Composable
 import app.cash.paparazzi.DeviceConfig
 import app.cash.paparazzi.Paparazzi
 import id.sch.mts241alikhlash.cbt.data.auth.AuthUser
 import id.sch.mts241alikhlash.cbt.data.model.ExamSummaryDto
-import id.sch.mts241alikhlash.cbt.data.model.StudentQuestionDto
+import id.sch.mts241alikhlash.cbt.data.model.PaperQuestionDto
 import id.sch.mts241alikhlash.cbt.ui.AppRootState
 import id.sch.mts241alikhlash.cbt.ui.AssessmentAppRoot
 import id.sch.mts241alikhlash.cbt.ui.screens.ExamContent
@@ -73,27 +75,30 @@ class ScreenshotTest {
     @Test
     fun examScreen() {
         val questions = listOf(
-            StudentQuestionDto(
+            PaperQuestionDto(
                 id = "q1", number = 1, type = "multiple_choice",
                 bodyHtml = "Hasil dari 12 x 8 adalah ...",
-                choices = listOf("86", "96", "104", "112"),
+                points = 1.0,
+                choices = choices("86", "96", "104", "112"),
             ),
-            StudentQuestionDto(
+            PaperQuestionDto(
                 id = "q2", number = 2, type = "multiple_choice",
                 bodyHtml = "Ibu kota Provinsi Jawa Timur adalah ...",
-                choices = listOf("Malang", "Surabaya", "Kediri", "Madiun"),
+                points = 1.0,
+                choices = choices("Malang", "Surabaya", "Kediri", "Madiun"),
             ),
-            StudentQuestionDto(
+            PaperQuestionDto(
                 id = "q3", number = 3, type = "multiple_choice",
                 bodyHtml = "Kalimat yang menggunakan ejaan baku adalah ...",
-                choices = listOf("A", "B", "C", "D"),
+                points = 1.0,
+                choices = choices("A", "B", "C", "D"),
             ),
         )
         val state = ExamUiState(
             isLoading = false,
             questions = questions,
             currentIndex = 0,
-            answers = mapOf("q1" to "96"),
+            answers = mapOf("q1" to AnswerPayload.Choice("B")),
             doubtfuls = setOf("q2"),
             remainingSeconds = 5340,
         )
@@ -101,7 +106,7 @@ class ScreenshotTest {
             CBTTheme {
                 ExamContent(
                     state = state,
-                    onSelectAnswer = { _, _ -> },
+                    onAnswer = { _, _ -> },
                     onToggleDoubtful = {},
                     onGoToIndex = {},
                     onSubmit = {},
@@ -127,7 +132,7 @@ class ScreenshotTest {
                         isLoading = false,
                         errorMessage = "Tidak dapat memuat soal. Periksa koneksi.",
                     ),
-                    onSelectAnswer = { _, _ -> },
+                    onAnswer = { _, _ -> },
                     onToggleDoubtful = {},
                     onGoToIndex = {},
                     onSubmit = {},
@@ -171,10 +176,11 @@ class ScreenshotTest {
         val state = ExamUiState(
             isLoading = false,
             questions = listOf(
-                StudentQuestionDto(
+                PaperQuestionDto(
                     id = "q1", number = 1, type = "multiple_choice",
                     bodyHtml = "Hasil dari 12 x 8 adalah ...",
-                    choices = listOf("86", "96", "104", "112"),
+                    points = 1.0,
+                    choices = choices("86", "96", "104", "112"),
                 )
             ),
             remainingSeconds = 2700,
@@ -184,7 +190,7 @@ class ScreenshotTest {
             CBTTheme {
                 ExamContent(
                     state = state,
-                    onSelectAnswer = { _, _ -> },
+                    onAnswer = { _, _ -> },
                     onToggleDoubtful = {},
                     onGoToIndex = {},
                     onSubmit = {},
@@ -225,31 +231,34 @@ private fun PreviewExamScreen() {
     val state = ExamUiState(
         isLoading = false,
         questions = listOf(
-            StudentQuestionDto(
+            PaperQuestionDto(
                 id = "q1", number = 1, type = "multiple_choice",
                 bodyHtml = "Hasil dari 12 x 8 adalah ...",
-                choices = listOf("86", "96", "104", "112"),
+                points = 1.0,
+                choices = choices("86", "96", "104", "112"),
             ),
-            StudentQuestionDto(
+            PaperQuestionDto(
                 id = "q2", number = 2, type = "multiple_choice",
                 bodyHtml = "Ibu kota Provinsi Jawa Timur adalah ...",
-                choices = listOf("Malang", "Surabaya", "Kediri", "Madiun"),
+                points = 1.0,
+                choices = choices("Malang", "Surabaya", "Kediri", "Madiun"),
             ),
-            StudentQuestionDto(
+            PaperQuestionDto(
                 id = "q3", number = 3, type = "multiple_choice",
                 bodyHtml = "Kalimat yang menggunakan ejaan baku adalah ...",
-                choices = listOf("A", "B", "C", "D"),
+                points = 1.0,
+                choices = choices("A", "B", "C", "D"),
             ),
         ),
         currentIndex = 0,
-        answers = mapOf("q1" to "96"),
+        answers = mapOf("q1" to AnswerPayload.Choice("B")),
         doubtfuls = setOf("q2"),
         remainingSeconds = 5340,
     )
     CBTTheme {
         ExamContent(
             state = state,
-            onSelectAnswer = { _, _ -> },
+            onAnswer = { _, _ -> },
             onToggleDoubtful = {},
             onGoToIndex = {},
             onSubmit = {},

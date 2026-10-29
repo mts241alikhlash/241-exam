@@ -1,6 +1,7 @@
 package id.sch.mts241alikhlash.cbt.data.auth
 
 import id.sch.mts241alikhlash.cbt.data.remote.ApiException
+import id.sch.mts241alikhlash.cbt.data.remote.GENERIC_ERROR_MESSAGE
 import id.sch.mts241alikhlash.cbt.data.remote.apiCall
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -20,12 +21,13 @@ class AuthRepository(
 
     suspend fun login(identifier: String, password: String, requiredRole: String): AuthUser {
         val response = apiCall { api.login(LoginRequest(identifier.trim(), password, deviceId())) }
+        val firstTokens = response.toTokens(now())
         val user = response.user.toUser()
         if (requiredRole !in user.roles) {
-            revoke(response.refreshToken)
+            revoke(firstTokens.refreshToken)
             throw ApiException(403, "Akun ini tidak dapat masuk di sini.")
         }
-        store.save(StoredAuth(response.toTokens(now()), user))
+        store.save(StoredAuth(firstTokens, user))
         _rejected.value = false
         return user
     }
@@ -33,16 +35,17 @@ class AuthRepository(
     suspend fun relogin(identifier: String, password: String) {
         val stored = store.load()
         val response = apiCall { api.login(LoginRequest(identifier.trim(), password, deviceId())) }
+        val reloginTokens = response.toTokens(now())
         val user = response.user.toUser()
         if (stored != null && user.id != stored.user.id) {
-            revoke(response.refreshToken)
+            revoke(reloginTokens.refreshToken)
             throw ApiException(403, "Akun berbeda dengan akun ujian.")
         }
         if (ROLE_STUDENT !in user.roles) {
-            revoke(response.refreshToken)
+            revoke(reloginTokens.refreshToken)
             throw ApiException(403, "Akun ini tidak dapat masuk di sini.")
         }
-        store.save(StoredAuth(response.toTokens(now()), user))
+        store.save(StoredAuth(reloginTokens, user))
         _rejected.value = false
     }
 
@@ -65,7 +68,7 @@ class AuthRepository(
             }
             try {
                 val response = apiCall { api.refresh(RefreshRequest(before, deviceId())) }
-                val tokens = response.toTokens(now())
+                val tokens = response.toTokens(now(), before)
                 store.save(stored.copy(tokens = tokens))
                 tokens
             } catch (e: ApiException) {
@@ -88,5 +91,9 @@ class AuthRepository(
 
 private fun AuthUserDto.toUser() = AuthUser(id, name, roles.toSet())
 
-private fun AuthResponseDto.toTokens(now: Long) =
-    AuthTokens(accessToken, refreshToken, now + expiresIn * 1000)
+private fun AuthResponseDto.toTokens(now: Long, held: String? = null) =
+    AuthTokens(
+        accessToken,
+        refreshToken ?: held ?: throw ApiException(0, GENERIC_ERROR_MESSAGE),
+        now + expiresIn * 1000
+    )

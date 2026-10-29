@@ -23,6 +23,9 @@ interface AnswerDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun saveAnswer(answer: CachedAnswerEntity)
 
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertIfAbsent(answer: CachedAnswerEntity): Long
+
     /**
      * Marks one exact answer revision as uploaded.
      *

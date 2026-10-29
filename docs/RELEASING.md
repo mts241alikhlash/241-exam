@@ -170,3 +170,11 @@ confirm the certificate fingerprint matches the expected release key.
 file to version control.** This repository ignores build output but does not track
 key material; keep it in encrypted storage and CI secrets only. A leaked keystore
 plus password lets anyone publish malicious updates under the app's identity.
+
+## Room migration 2 to 3 (exam session release)
+
+Version 3 rebuilds `cached_questions` (it gains `points`) and deletes the synced rows of
+`cached_answers`. Answers that were never uploaded (`isSynced = 0`) are kept, but their
+format is the old plain string: the app sends them as a single-choice key and the server
+will most likely reject them. Do not roll this update out to a tablet that still holds
+unsent answers; let the student hand in first.

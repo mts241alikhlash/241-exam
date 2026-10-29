@@ -1,5 +1,10 @@
 package id.sch.mts241alikhlash.cbt.ui.screens
 
+import id.sch.mts241alikhlash.cbt.ui.exam.ImageContext
+import id.sch.mts241alikhlash.cbt.ui.exam.QuestionAnswerInput
+import id.sch.mts241alikhlash.cbt.ui.exam.isFilled
+import id.sch.mts241alikhlash.cbt.ui.exam.HtmlContent
+import id.sch.mts241alikhlash.cbt.data.model.AnswerPayload
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -78,32 +83,48 @@ import id.sch.mts241alikhlash.cbt.ui.theme.TextSecondary
 @Composable
 fun ExamScreen(
     viewModel: ExamViewModel,
+    sessionId: String,
+    baseUrl: String,
+    imageLoader: coil3.ImageLoader?,
     onFinish: () -> Unit,
-    onSupervisorExit: () -> Unit = {}
+    onSupervisorExit: () -> Unit = {},
+    onSessionLost: (String) -> Unit = {}
 ) {
     val state by viewModel.uiState.collectAsState()
     ExamContent(
         state = state,
-        onSelectAnswer = viewModel::selectAnswer,
+        onAnswer = viewModel::selectAnswer,
+        onToggleKey = viewModel::toggleKey,
+        onTextChange = viewModel::updateText,
         onToggleDoubtful = viewModel::toggleDoubtful,
         onGoToIndex = viewModel::goToIndex,
         onSubmit = viewModel::submitExam,
         onRetry = viewModel::retry,
         onFinish = onFinish,
-        onSupervisorExit = onSupervisorExit
+        onSupervisorExit = onSupervisorExit,
+        onSessionLost = onSessionLost,
+        sessionId = sessionId,
+        baseUrl = baseUrl,
+        imageLoader = imageLoader
     )
 }
 
 @Composable
 fun ExamContent(
     state: ExamUiState,
-    onSelectAnswer: (String, String) -> Unit,
+    onAnswer: (String, AnswerPayload) -> Unit,
+    onToggleKey: (String, String) -> Unit = { _, _ -> },
+    onTextChange: (String, String) -> Unit = { _, _ -> },
     onToggleDoubtful: (String) -> Unit,
     onGoToIndex: (Int) -> Unit,
     onSubmit: () -> Unit,
     onRetry: () -> Unit,
     onFinish: () -> Unit,
-    onSupervisorExit: () -> Unit = {}
+    onSupervisorExit: () -> Unit = {},
+    onSessionLost: (String) -> Unit = {},
+    sessionId: String = "",
+    baseUrl: String = "",
+    imageLoader: coil3.ImageLoader? = null
 ) {
     var showConfirmDialog by remember { mutableStateOf(false) }
 
@@ -113,10 +134,32 @@ fun ExamContent(
         }
     }
 
+    LaunchedEffect(state.lostMessage) {
+        state.lostMessage?.let(onSessionLost)
+    }
+
     LaunchedEffect(state.submitError) {
-        if (state.submitError != null) {
+        if (state.submitError != null && !state.isTimeOver) {
             showConfirmDialog = true
         }
+    }
+
+    if (state.isTimeOver && !state.isSubmitted) {
+        AlertDialog(
+            onDismissRequest = {},
+            title = { Text("Waktu habis") },
+            text = {
+                Text(
+                    state.submitError?.let { "Mengirim jawaban… $it Mencoba lagi." }
+                        ?: "Mengirim jawaban…"
+                )
+            },
+            confirmButton = {
+                if (!state.isSubmitting && state.submitError != null) {
+                    TextButton(onClick = onSubmit) { Text("Coba lagi") }
+                }
+            }
+        )
     }
 
     if (showConfirmDialog) {
@@ -134,7 +177,7 @@ fun ExamContent(
                 )
             },
             text = {
-                val answered = state.answers.size
+                val answered = state.questions.count { q -> state.answers[q.id].isFilled() || !state.drafts[q.id].isNullOrBlank() }
                 val total = state.questions.size
                 val doubtfulCount = state.doubtfuls.size
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -454,7 +497,6 @@ fun ExamContent(
 
             else -> {
                 val currentQ = state.questions[state.currentIndex]
-                val selectedChoice = state.answers[currentQ.id]
 
                 Column(
                     modifier = Modifier
@@ -463,6 +505,15 @@ fun ExamContent(
                         .padding(padding)
                         .padding(horizontal = 16.dp, vertical = 12.dp)
                 ) {
+                    state.deliveryWarning?.let { warning ->
+                        Text(
+                            text = warning,
+                            fontFamily = DMSansFontFamily,
+                            fontSize = 12.sp,
+                            color = StatusError,
+                            modifier = Modifier.padding(bottom = 8.dp)
+                        )
+                    }
                     if (state.isResumed) {
                         Surface(
                             shape = RoundedCornerShape(8.dp),
@@ -491,7 +542,7 @@ fun ExamContent(
                     ) {
                         itemsIndexed(state.questions) { index, q ->
                             val isCurrent = index == state.currentIndex
-                            val isAnswered = state.answers.containsKey(q.id)
+                            val isAnswered = state.answers[q.id].isFilled() || !state.drafts[q.id].isNullOrBlank()
                             val isDoubtItem = state.doubtfuls.contains(q.id)
 
                             val bgColor = when {
@@ -588,83 +639,26 @@ fun ExamContent(
                             }
 
                             item {
-                                Text(
-                                    text = currentQ.bodyHtml.replace(Regex("<[^>]*>"), ""),
-                                    fontFamily = DMSansFontFamily,
-                                    fontSize = 15.sp,
-                                    lineHeight = 22.sp,
-                                    color = TextPrimary,
+                                HtmlContent(
+                                    html = currentQ.bodyHtml,
+                                    sessionId = sessionId,
+                                    baseUrl = baseUrl,
+                                    imageLoader = imageLoader,
                                     modifier = Modifier.padding(bottom = 20.dp)
                                 )
                             }
 
-                            if (currentQ.choices != null) {
-                                itemsIndexed(currentQ.choices) { index, choice ->
-                                    val letter = ('A' + index).toString()
-                                    val isSelected = selectedChoice == choice
-
-                                    Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(vertical = 5.dp)
-                                            .clip(RoundedCornerShape(8.dp))
-                                            .border(
-                                                width = if (isSelected) 1.5.dp else 1.dp,
-                                                color = if (isSelected) BorderFocus else BorderSubtle,
-                                                shape = RoundedCornerShape(8.dp)
-                                            )
-                                            .background(
-                                                color = if (isSelected) BrandNavySubtle else BrandSurface
-                                            )
-                                            // Answers are frozen while the paper is being submitted.
-                                            .clickable(enabled = state.canAnswer) {
-                                                onSelectAnswer(currentQ.id, choice)
-                                            }
-                                            .padding(horizontal = 14.dp, vertical = 12.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Box(
-                                            modifier = Modifier
-                                                .size(28.dp)
-                                                .clip(CircleShape)
-                                                .background(if (isSelected) BrandNavy else BrandMuted)
-                                                .border(
-                                                    1.dp,
-                                                    if (isSelected) BrandNavy else BorderSubtle,
-                                                    CircleShape
-                                                ),
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            Text(
-                                                text = letter,
-                                                fontFamily = DMSansFontFamily,
-                                                fontWeight = FontWeight.Bold,
-                                                fontSize = 12.sp,
-                                                color = if (isSelected) Color.White else TextSecondary
-                                            )
-                                        }
-
-                                        Spacer(modifier = Modifier.width(12.dp))
-
-                                        Text(
-                                            text = choice,
-                                            fontFamily = DMSansFontFamily,
-                                            fontSize = 14.sp,
-                                            color = if (isSelected) TextPrimary else TextSecondary,
-                                            lineHeight = 20.sp,
-                                            modifier = Modifier.weight(1f)
-                                        )
-
-                                        if (isSelected) {
-                                            Icon(
-                                                imageVector = Icons.Default.Check,
-                                                contentDescription = null,
-                                                tint = BrandNavy,
-                                                modifier = Modifier.size(16.dp)
-                                            )
-                                        }
-                                    }
-                                }
+                            item {
+                                QuestionAnswerInput(
+                                    question = currentQ,
+                                    answer = state.answers[currentQ.id],
+                                    draft = state.drafts[currentQ.id],
+                                    enabled = state.canAnswer,
+                                    images = ImageContext(sessionId, baseUrl, imageLoader),
+                                    onAnswer = { onAnswer(currentQ.id, it) },
+                                    onToggleKey = { onToggleKey(currentQ.id, it) },
+                                    onTextChange = { onTextChange(currentQ.id, it) }
+                                )
                             }
                         }
                     }

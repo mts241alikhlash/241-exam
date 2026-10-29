@@ -9,6 +9,7 @@ import id.sch.mts241alikhlash.cbt.data.auth.SupervisorVerifier
 import id.sch.mts241alikhlash.cbt.data.auth.TokenAuthenticator
 import id.sch.mts241alikhlash.cbt.data.auth.authLoggingInterceptor
 import id.sch.mts241alikhlash.cbt.data.local.ExamDatabase
+import id.sch.mts241alikhlash.cbt.data.remote.DeviceIdInterceptor
 import id.sch.mts241alikhlash.cbt.data.remote.EnvelopeConverterFactory
 import id.sch.mts241alikhlash.cbt.data.remote.ExamApiService
 import id.sch.mts241alikhlash.cbt.data.remote.ExamCatalogApiService
@@ -38,6 +39,9 @@ class CBTApplication : Application() {
         private set
 
     lateinit var catalogRepository: ExamCatalogRepository
+        private set
+
+    lateinit var imageLoader: coil3.ImageLoader
         private set
 
     @Volatile
@@ -84,11 +88,18 @@ class CBTApplication : Application() {
         )
 
         val client = OkHttpClient.Builder()
+            .addInterceptor(DeviceIdInterceptor { deviceId() })
             .addInterceptor(AuthInterceptor(authRepository))
             .authenticator(TokenAuthenticator(authRepository) { examActive })
             .addInterceptor(logging)
             .connectTimeout(10, TimeUnit.SECONDS)
             .readTimeout(10, TimeUnit.SECONDS)
+            .build()
+
+        imageLoader = coil3.ImageLoader.Builder(this)
+            .components {
+                add(coil3.network.okhttp.OkHttpNetworkFetcherFactory(callFactory = { client }))
+            }
             .build()
 
         val retrofit = Retrofit.Builder()

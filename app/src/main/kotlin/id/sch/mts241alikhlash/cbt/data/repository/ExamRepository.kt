@@ -4,16 +4,42 @@ import id.sch.mts241alikhlash.cbt.data.local.AnswerDao
 import id.sch.mts241alikhlash.cbt.data.local.CachedAnswerEntity
 import id.sch.mts241alikhlash.cbt.data.local.CachedQuestionEntity
 import id.sch.mts241alikhlash.cbt.data.local.QuestionDao
-import id.sch.mts241alikhlash.cbt.data.model.StudentQuestionDto
-import id.sch.mts241alikhlash.cbt.data.model.SubmitAnswerRequest
+import id.sch.mts241alikhlash.cbt.data.model.AnswerPayload
+import id.sch.mts241alikhlash.cbt.data.model.PaperChoiceDto
+import id.sch.mts241alikhlash.cbt.data.model.PaperQuestionDto
+import id.sch.mts241alikhlash.cbt.data.model.SaveAnswerRequest
+import id.sch.mts241alikhlash.cbt.data.model.SubmittedSessionDto
+import id.sch.mts241alikhlash.cbt.data.remote.ApiException
 import id.sch.mts241alikhlash.cbt.data.remote.ExamApiService
+import id.sch.mts241alikhlash.cbt.data.remote.guarded
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.builtins.ListSerializer
-import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.json.Json
 import kotlin.coroutines.cancellation.CancellationException
 
-data class SyncReport(val synced: Int, val failed: Int)
+data class SyncReport(
+    val synced: Int,
+    val failed: Int,
+    val rejected: Int = 0,
+    val closedMessage: String? = null
+)
+
+sealed interface SendOutcome {
+    data object Sent : SendOutcome
+    data object Retry : SendOutcome
+    data object Offline : SendOutcome
+    data object Superseded : SendOutcome
+    data class Closed(val message: String) : SendOutcome
+    data class Rejected(val message: String) : SendOutcome
+}
+
+private fun answerRequest(questionId: String, answer: String, clientId: String) = SaveAnswerRequest(
+    questionId = questionId,
+    clientId = clientId,
+    answer = (AnswerPayload.decode(answer) ?: AnswerPayload.Choice(answer)).toJson()
+)
 
 fun answerClientId(sessionId: String, questionId: String, answer: String, updatedAt: Long): String =
     java.util.UUID.nameUUIDFromBytes("$sessionId|$questionId|$updatedAt|$answer".toByteArray()).toString()
@@ -29,6 +55,8 @@ class ExamRepository(
         LOGGER.log(java.util.logging.Level.WARNING, message, error)
     }
 ) {
+    private val sendLock = Mutex()
+
     fun observeAnswers(sessionId: String): Flow<List<CachedAnswerEntity>> {
         return dao.observeAnswers(sessionId)
     }
@@ -36,7 +64,7 @@ class ExamRepository(
     suspend fun getQuestions(
         sessionId: String,
         forceRefresh: Boolean = false
-    ): Result<List<StudentQuestionDto>> {
+    ): Result<List<PaperQuestionDto>> {
         val cached = loadCache(sessionId)
         if (!forceRefresh && cached.isNotEmpty() && !isStale(cached)) {
             return Result.success(cached.map { it.toDto() })
@@ -66,7 +94,7 @@ class ExamRepository(
      * Writes the freshly downloaded paper to the cache without letting a cache failure
      * turn a successful download into a blank screen: the network result still wins.
      */
-    private suspend fun cacheQuestions(sessionId: String, remote: List<StudentQuestionDto>) {
+    private suspend fun cacheQuestions(sessionId: String, remote: List<PaperQuestionDto>) {
         try {
             questionDao.replaceForSession(sessionId, remote.map { it.toEntity(sessionId, now()) })
         } catch (cancellation: CancellationException) {
@@ -75,6 +103,8 @@ class ExamRepository(
             log("Failed to cache questions for $sessionId", error)
         }
     }
+
+    suspend fun submit(sessionId: String): SubmittedSessionDto = guarded { api.submit(sessionId) }
 
     suspend fun clearQuestions(sessionId: String) {
         questionDao.deleteForSession(sessionId)
@@ -85,7 +115,7 @@ class ExamRepository(
         sessionId: String,
         answer: String,
         isDoubtful: Boolean = false
-    ) {
+    ): SendOutcome {
         val entity = CachedAnswerEntity(
             questionId = questionId,
             sessionId = sessionId,
@@ -94,14 +124,22 @@ class ExamRepository(
             isSynced = false,
             updatedAt = now()
         )
+        if (answer.isBlank()) {
+            dao.saveAnswer(entity.copy(isSynced = true))
+            return SendOutcome.Sent
+        }
         dao.saveAnswer(entity)
 
-        runCatching {
-            api.saveAnswer(sessionId, SubmitAnswerRequest(questionId, answer, answerClientId(sessionId, questionId, answer, entity.updatedAt)))
-        }.onSuccess {
-            // Only this exact revision may be marked: a newer edit made while the
-            // request was in flight must stay pending.
-            dao.markSynced(sessionId, questionId, answer, entity.updatedAt)
+        return sendLock.withLock {
+            val latest = dao.getAnswer(sessionId, questionId)
+            if (latest == null || latest.isSynced || latest.updatedAt != entity.updatedAt || latest.answer != entity.answer) {
+                return@withLock SendOutcome.Superseded
+            }
+            send(latest).also { outcome ->
+                // Only this exact revision may be marked: a newer edit made while the
+                // request was in flight must stay pending.
+                if (outcome == SendOutcome.Sent) dao.markSynced(sessionId, questionId, answer, entity.updatedAt)
+            }
         }
     }
 
@@ -113,31 +151,88 @@ class ExamRepository(
      * an answer mid-sync and the snapshot taken before the loop goes stale.
      */
     suspend fun syncPending(sessionId: String): SyncReport {
-        val pending = dao.getUnsyncedAnswers(sessionId)
         var synced = 0
-        for (item in pending) {
-            try {
-                api.saveAnswer(sessionId, SubmitAnswerRequest(
-                        item.questionId,
-                        item.answer,
-                        answerClientId(item.sessionId, item.questionId, item.answer, item.updatedAt)
-                    ))
-                val marked = dao.markSynced(
-                    sessionId = item.sessionId,
-                    questionId = item.questionId,
-                    answer = item.answer,
-                    updatedAt = item.updatedAt
-                )
-                if (marked > 0) synced++
-            } catch (cancellation: CancellationException) {
-                throw cancellation
-            } catch (error: Exception) {
-                log("Failed to sync answer ${item.questionId}", error)
+        var rejected = 0
+        var closedMessage: String? = null
+        sendLock.withLock {
+            val pending = dao.getUnsyncedAnswers(sessionId)
+            loop@ for (item in pending) {
+                when (val outcome = send(item)) {
+                    SendOutcome.Sent -> {
+                        val marked = dao.markSynced(
+                            sessionId = item.sessionId,
+                            questionId = item.questionId,
+                            answer = item.answer,
+                            updatedAt = item.updatedAt
+                        )
+                        if (marked > 0) synced++
+                    }
+                    is SendOutcome.Closed -> {
+                        closedMessage = outcome.message
+                        break@loop
+                    }
+                    is SendOutcome.Rejected -> rejected++
+                    SendOutcome.Offline -> break@loop
+                    SendOutcome.Retry, SendOutcome.Superseded -> Unit
+                }
             }
         }
         val remaining = dao.countUnsyncedAnswers(sessionId)
-        return SyncReport(synced = synced, failed = remaining)
+        return SyncReport(synced = synced, failed = remaining, rejected = rejected, closedMessage = closedMessage)
     }
+
+    suspend fun pullServerAnswers(sessionId: String): Int {
+        val remote = guarded { api.getAnswers(sessionId) }
+        var imported = 0
+        for (item in remote) {
+            val payload = AnswerPayload.fromJson(item.answer) ?: continue
+            val inserted = dao.insertIfAbsent(
+                CachedAnswerEntity(
+                    questionId = item.questionId,
+                    sessionId = sessionId,
+                    answer = payload.encode(),
+                    isDoubtful = false,
+                    isSynced = true,
+                    updatedAt = now()
+                )
+            )
+            if (inserted != -1L) imported++
+        }
+        return imported
+    }
+
+    private suspend fun send(item: CachedAnswerEntity): SendOutcome =
+        try {
+            guarded {
+                api.saveAnswer(
+                    item.sessionId,
+                    answerRequest(
+                        item.questionId,
+                        item.answer,
+                        answerClientId(item.sessionId, item.questionId, item.answer, item.updatedAt)
+                    )
+                )
+            }
+            SendOutcome.Sent
+        } catch (cancellation: CancellationException) {
+            throw cancellation
+        } catch (error: ApiException) {
+            when (error.statusCode) {
+                409 -> SendOutcome.Closed(error.message)
+                400 -> SendOutcome.Rejected(error.message)
+                0 -> {
+                    log("Failed to sync answer ${item.questionId}", error)
+                    SendOutcome.Offline
+                }
+                else -> {
+                    log("Failed to sync answer ${item.questionId}", error)
+                    SendOutcome.Retry
+                }
+            }
+        } catch (error: Exception) {
+            log("Failed to sync answer ${item.questionId}", error)
+            SendOutcome.Retry
+        }
 
     private suspend fun loadCache(sessionId: String): List<CachedQuestionEntity> =
         try {
@@ -162,26 +257,28 @@ class ExamRepository(
     }
 }
 
-private fun StudentQuestionDto.toEntity(sessionId: String, cachedAt: Long) = CachedQuestionEntity(
+private fun PaperQuestionDto.toEntity(sessionId: String, cachedAt: Long) = CachedQuestionEntity(
     sessionId = sessionId,
     id = id,
     number = number,
     type = type,
     bodyHtml = bodyHtml,
+    points = points,
     choicesJson = choices?.let {
-        ExamRepository.json.encodeToString(ListSerializer(String.serializer()), it)
+        ExamRepository.json.encodeToString(ListSerializer(PaperChoiceDto.serializer()), it)
     },
     cachedAt = cachedAt
 )
 
-private fun CachedQuestionEntity.toDto() = StudentQuestionDto(
+private fun CachedQuestionEntity.toDto() = PaperQuestionDto(
     id = id,
     number = number,
     type = type,
     bodyHtml = bodyHtml,
+    points = points,
     choices = choicesJson?.let { encoded ->
         runCatching {
-            ExamRepository.json.decodeFromString(ListSerializer(String.serializer()), encoded)
+            ExamRepository.json.decodeFromString(ListSerializer(PaperChoiceDto.serializer()), encoded)
         }.getOrNull()
     }
 )

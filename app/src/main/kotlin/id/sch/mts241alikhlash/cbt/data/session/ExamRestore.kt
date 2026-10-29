@@ -1,9 +1,11 @@
 package id.sch.mts241alikhlash.cbt.data.session
 
+import id.sch.mts241alikhlash.cbt.data.remote.ApiException
 import id.sch.mts241alikhlash.cbt.data.repository.SyncReport
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.coroutines.cancellation.CancellationException
 
 /**
@@ -18,8 +20,10 @@ sealed interface RestoreOutcome {
     data object NoSession : RestoreOutcome
     data class Restored(val session: RestoredSession) : RestoreOutcome
     data class Failed(val message: String) : RestoreOutcome
+    data class SessionLost(val message: String) : RestoreOutcome
 }
 
+const val RESTORE_CHECK_TIMEOUT_MS = 3_000L
 const val RESTORE_ERROR_MESSAGE = "Gagal memulihkan sesi ujian. Coba lagi."
 
 /**
@@ -32,6 +36,7 @@ suspend fun restoreExamSession(
     sessionRepository: SessionRepository,
     scope: CoroutineScope,
     syncPending: suspend (String) -> SyncReport,
+    validate: suspend (String) -> Unit = {},
     onSyncResult: (Result<SyncReport>) -> Unit = {}
 ): RestoreOutcome {
     val session = try {
@@ -41,6 +46,12 @@ suspend fun restoreExamSession(
         throw cancellation
     } catch (_: Exception) {
         return RestoreOutcome.Failed(RESTORE_ERROR_MESSAGE)
+    }
+
+    val lost = sessionLostMessage(session.sessionId, validate)
+    if (lost != null) {
+        sessionRepository.finishIfCurrent(session.sessionId)
+        return RestoreOutcome.SessionLost(lost)
     }
 
     syncPendingInBackground(scope, session.sessionId, syncPending, onSyncResult)
@@ -67,3 +78,15 @@ fun syncPendingInBackground(
     }
     onResult(result)
 }
+
+private suspend fun sessionLostMessage(sessionId: String, validate: suspend (String) -> Unit): String? =
+    try {
+        withTimeoutOrNull(RESTORE_CHECK_TIMEOUT_MS) { validate(sessionId) }
+        null
+    } catch (cancellation: CancellationException) {
+        throw cancellation
+    } catch (error: ApiException) {
+        if (error.statusCode == 409 || error.statusCode == 404) error.message else null
+    } catch (_: Exception) {
+        null
+    }

@@ -87,7 +87,11 @@ class MainActivity : ComponentActivity() {
                     val outcome = restoreExamSession(
                         sessionRepository = app.sessionRepository,
                         scope = lifecycleScope,
-                        syncPending = app.repository::syncPending
+                        syncPending = app.repository::syncPending,
+                        validate = { id ->
+                            app.examActive = true
+                            app.repository.pullServerAnswers(id)
+                        }
                     ) { result ->
                         result.exceptionOrNull()?.let {
                             // Startup sync is best effort: report, never block the exam.
@@ -104,6 +108,16 @@ class MainActivity : ComponentActivity() {
                             user = runCatching { app.authRepository.currentStudent() }.getOrNull(),
                             sessionId = outcome.session.sessionId,
                             deadline = outcome.session.deadline
+                        )
+                    }
+
+                    is RestoreOutcome.SessionLost -> {
+                        app.examActive = false
+                        val storedUser = runCatching { app.authRepository.currentStudent() }.getOrNull()
+                        appState = AppRootState(
+                            restoreComplete = true,
+                            user = storedUser,
+                            notice = outcome.message
                         )
                     }
 
@@ -138,7 +152,11 @@ class MainActivity : ComponentActivity() {
                                     app.catalogRepository,
                                     app.sessionRepository,
                                     exam.id,
-                                    accessCode
+                                    accessCode,
+                                    pullAnswers = { id ->
+                                        app.examActive = true
+                                        app.repository.pullServerAnswers(id)
+                                    }
                                 )
                             }
                             val failure = started.exceptionOrNull()
@@ -187,7 +205,8 @@ class MainActivity : ComponentActivity() {
                     ExamListScreen(
                         studentName = appState.user?.name.orEmpty(),
                         viewModel = listViewModel,
-                        onSelect = { appState = appState.copy(selectedExam = it, startError = null) },
+                        notice = appState.notice,
+                        onSelect = { appState = appState.copy(selectedExam = it, startError = null, notice = null) },
                         onLogout = {
                             lifecycleScope.launch {
                                 app.authRepository.logout()
@@ -207,18 +226,40 @@ class MainActivity : ComponentActivity() {
                         )
                         return@AssessmentAppRoot
                     }
-                    val viewModel = remember(sessionId) {
-                        ExamViewModel(
-                            repository = app.repository,
-                            sessionId = sessionId,
-                            deadline = deadline,
-                            restored = sessionRestored
-                        )
-                    }
+                    val viewModel = viewModel<ExamViewModel>(
+                        key = "exam-$sessionId",
+                        factory = viewModelFactory {
+                            initializer {
+                                ExamViewModel(
+                                    repository = app.repository,
+                                    sessionId = sessionId,
+                                    deadline = deadline,
+                                    restored = sessionRestored,
+                                    onSubmitConfirmed = { id -> app.sessionRepository.finishIfCurrent(id) }
+                                )
+                            }
+                        }
+                    )
 
                     ExamScreen(
                         viewModel = viewModel,
+                        sessionId = sessionId,
+                        baseUrl = BuildConfig.BASE_URL,
+                        imageLoader = app.imageLoader,
                         onSupervisorExit = { showSupervisorExit = true },
+                        onSessionLost = { message ->
+                            lifecycleScope.launch {
+                                runCatching { app.sessionRepository.finishIfCurrent(sessionId) }
+                                isExamActive = false
+                                stopKioskMode()
+                                appState = appState.copy(
+                                    sessionId = null,
+                                    deadline = null,
+                                    selectedExam = null,
+                                    notice = message
+                                )
+                            }
+                        },
                         onFinish = {
                             // Teardown must finish before success is announced: if the
                             // session survives, the next launch would resume a submitted
@@ -239,10 +280,14 @@ class MainActivity : ComponentActivity() {
                                 stopKioskMode()
                                 appState = appState.copy(sessionId = null, deadline = null, selectedExam = null)
 
+                                val unsent = viewModel.uiState.value.unsentAnswers
                                 Toast.makeText(
                                     this@MainActivity,
-                                    if (ended) "Ujian berhasil dikumpulkan"
-                                    else "Ujian selesai, tetapi sesi gagal dibersihkan",
+                                    when {
+                                        unsent > 0 -> "Ujian dikumpulkan, tetapi $unsent jawaban tidak sempat terkirim"
+                                        ended -> "Ujian berhasil dikumpulkan"
+                                        else -> "Ujian selesai, tetapi sesi gagal dibersihkan"
+                                    },
                                     Toast.LENGTH_LONG
                                 ).show()
                             }

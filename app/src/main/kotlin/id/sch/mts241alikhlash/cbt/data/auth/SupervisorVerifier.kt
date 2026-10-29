@@ -13,7 +13,7 @@ class SupervisorVerifier(
         if (identifier.isBlank() || password.isEmpty()) return SupervisorResult.Denied
         return try {
             val response = apiCall { api.login(LoginRequest(identifier.trim(), password, deviceId())) }
-            runCatching { api.logout(LogoutRequest(response.refreshToken)) }
+            response.refreshToken?.let { token -> runCatching { api.logout(LogoutRequest(token)) } }
             if (ROLE_TEACHER in response.user.roles) SupervisorResult.Approved else SupervisorResult.Denied
         } catch (e: ApiException) {
             if (e.statusCode == 0) SupervisorResult.Offline else SupervisorResult.Denied

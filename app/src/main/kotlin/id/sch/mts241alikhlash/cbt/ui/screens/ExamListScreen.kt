@@ -40,20 +40,13 @@ import id.sch.mts241alikhlash.cbt.ui.theme.TextMuted
 import id.sch.mts241alikhlash.cbt.ui.theme.TextPrimary
 import id.sch.mts241alikhlash.cbt.ui.theme.TextSecondary
 
-private fun statusLabel(status: String) = when (status) {
-    "OPEN" -> "Dibuka"
-    "IN_PROGRESS" -> "Sedang berlangsung"
-    "UPCOMING" -> "Belum dibuka"
-    "FINISHED" -> "Selesai"
-    else -> status
-}
-
 @Composable
 fun ExamListScreen(
     studentName: String,
     viewModel: ExamListViewModel,
     onSelect: (ExamSummaryDto) -> Unit,
-    onLogout: () -> Unit
+    onLogout: () -> Unit,
+    notice: String? = null
 ) {
     val state by viewModel.state.collectAsState()
 
@@ -86,6 +79,20 @@ fun ExamListScreen(
             TextButton(onClick = onLogout) {
                 Text("Keluar", fontFamily = DMSansFontFamily, color = TextMuted)
             }
+        }
+        notice?.let {
+            Spacer(modifier = Modifier.height(10.dp))
+            Text(
+                text = it,
+                fontSize = 12.sp,
+                fontFamily = DMSansFontFamily,
+                color = TextSecondary,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(BrandSurface, RoundedCornerShape(8.dp))
+                    .border(1.dp, BorderSubtle, RoundedCornerShape(8.dp))
+                    .padding(12.dp)
+            )
         }
         Spacer(modifier = Modifier.height(16.dp))
 
@@ -138,14 +145,14 @@ private fun ExamRow(exam: ExamSummaryDto, onSelect: (ExamSummaryDto) -> Unit) {
         )
         Spacer(modifier = Modifier.height(2.dp))
         Text(
-            text = "${exam.subjectName} · ${exam.durationMinutes} menit",
+            text = "${exam.durationMinutes} menit",
             fontSize = 12.sp,
             fontFamily = DMSansFontFamily,
             color = TextSecondary
         )
         Spacer(modifier = Modifier.height(6.dp))
         Text(
-            text = statusLabel(exam.status),
+            text = examStatusLabel(exam.status, exam.startsAt),
             fontSize = 12.sp,
             fontWeight = FontWeight.Medium,
             fontFamily = DMSansFontFamily,

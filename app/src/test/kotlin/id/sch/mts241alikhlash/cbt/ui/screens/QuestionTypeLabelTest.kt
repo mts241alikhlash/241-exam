@@ -44,3 +44,14 @@ class QuestionTypeLabelTest {
         }
     }
 }
+
+class QuestionTypeLabelCoverageTest {
+    @org.junit.Test
+    fun covers_all_five_server_types() {
+        org.junit.Assert.assertEquals("PILIHAN GANDA", questionTypeLabel("MULTIPLE_CHOICE"))
+        org.junit.Assert.assertEquals("PILIHAN GANDA KOMPLEKS", questionTypeLabel("MULTIPLE_RESPONSE"))
+        org.junit.Assert.assertEquals("BENAR / SALAH", questionTypeLabel("TRUE_FALSE"))
+        org.junit.Assert.assertEquals("JAWABAN SINGKAT", questionTypeLabel("SHORT_ANSWER"))
+        org.junit.Assert.assertEquals("URAIAN", questionTypeLabel("ESSAY"))
+    }
+}

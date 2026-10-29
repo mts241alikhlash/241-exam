@@ -40,17 +40,10 @@ data class AppRootState(
     val user: AuthUser? = null,
     val selectedExam: ExamSummaryDto? = null,
     val starting: Boolean = false,
-    val startError: String? = null
+    val startError: String? = null,
+    val notice: String? = null
 )
 
-/**
- * The application root: splash → restore error → exam (active session) → login → exam list → token → exam.
- *
- * The whole tree is wrapped in [AssessmentTheme] here, and nowhere else in `main`, so
- * brand colours resolve through `MaterialTheme` (e.g. `ButtonDefaults.buttonColors(
- * containerColor = BrandNavy)` picks up `onPrimary` for its label). Extracted from
- * `MainActivity` so a Paparazzi test can compose the real root and catch a missing theme.
- */
 @Composable
 fun AssessmentAppRoot(
     state: AppRootState,
