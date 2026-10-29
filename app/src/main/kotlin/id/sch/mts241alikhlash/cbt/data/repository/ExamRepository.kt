@@ -12,6 +12,7 @@ import id.sch.mts241alikhlash.cbt.data.model.SubmitRequest
 import id.sch.mts241alikhlash.cbt.data.model.SubmittedSessionDto
 import id.sch.mts241alikhlash.cbt.data.remote.ApiException
 import id.sch.mts241alikhlash.cbt.data.remote.ExamApiService
+import id.sch.mts241alikhlash.cbt.data.model.ViolationReport
 import id.sch.mts241alikhlash.cbt.data.remote.guarded
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.sync.Mutex
@@ -107,6 +108,17 @@ class ExamRepository(
 
     suspend fun submit(sessionId: String, violations: Int = 0): SubmittedSessionDto =
         guarded { api.submit(sessionId, SubmitRequest(violations)) }
+
+    /** The count the server holds after this report, or null when it could not be reached. */
+    suspend fun reportViolations(sessionId: String, count: Int): Int? =
+        try {
+            guarded { api.reportViolations(sessionId, ViolationReport(count)) }.violationCount
+        } catch (cancellation: CancellationException) {
+            throw cancellation
+        } catch (error: Exception) {
+            log("Failed to report violations for $sessionId", error)
+            null
+        }
 
     suspend fun clearQuestions(sessionId: String) {
         questionDao.deleteForSession(sessionId)

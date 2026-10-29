@@ -6,6 +6,8 @@ import id.sch.mts241alikhlash.cbt.data.model.SavedAnswerAckDto
 import id.sch.mts241alikhlash.cbt.data.model.SavedAnswerDto
 import id.sch.mts241alikhlash.cbt.data.model.SubmitRequest
 import id.sch.mts241alikhlash.cbt.data.model.SubmittedSessionDto
+import id.sch.mts241alikhlash.cbt.data.model.ViolationCountDto
+import id.sch.mts241alikhlash.cbt.data.model.ViolationReport
 import retrofit2.http.Body
 import retrofit2.http.GET
 import retrofit2.http.POST
@@ -33,4 +35,10 @@ interface ExamApiService {
         @Path("sessionId") sessionId: String,
         @Body request: SubmitRequest
     ): SubmittedSessionDto
+
+    @POST("student-exams/{sessionId}/violations")
+    suspend fun reportViolations(
+        @Path("sessionId") sessionId: String,
+        @Body request: ViolationReport
+    ): ViolationCountDto = ViolationCountDto(request.count)
 }

@@ -273,6 +273,11 @@ class MainActivity : ComponentActivity() {
                     }
                     val counted by countedViolations.collectAsState()
                     LaunchedEffect(counted) { viewModel.recordViolations(counted) }
+                    val serverViolations by viewModel.uiState.collectAsState()
+                    LaunchedEffect(serverViolations.serverViolations) {
+                        violations.restore(serverViolations.serverViolations)
+                        countedViolations.value = violations.counted()
+                    }
 
                     ExamScreen(
                         viewModel = viewModel,

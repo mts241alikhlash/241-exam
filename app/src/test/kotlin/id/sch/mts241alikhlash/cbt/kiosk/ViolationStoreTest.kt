@@ -69,4 +69,54 @@ class ViolationStoreTest {
         store.beginSession("s2")
         assertEquals(0, store.counted())
     }
+
+    @Test
+    fun `restoring a higher count from the server raises what is counted`() {
+        store.beginSession("s1")
+        store.record("left_app")
+
+        store.restore(3)
+
+        assertEquals(3, store.counted())
+    }
+
+    @Test
+    fun `restoring never lowers the count`() {
+        store.beginSession("s1")
+        store.record("left_app")
+        store.record("pin_lost")
+
+        store.restore(1)
+
+        assertEquals(2, store.counted())
+    }
+
+    @Test
+    fun `an event after a restore adds to the restored count`() {
+        store.beginSession("s1")
+        store.restore(3)
+
+        store.record("left_app")
+
+        assertEquals(4, store.counted())
+    }
+
+    @Test
+    fun `a restore of the same session is not counted twice`() {
+        store.beginSession("s1")
+        store.restore(3)
+        store.restore(3)
+
+        assertEquals(3, store.counted())
+    }
+
+    @Test
+    fun `a new session starts without the restored count of the old one`() {
+        store.beginSession("s1")
+        store.restore(3)
+
+        store.beginSession("s2")
+
+        assertEquals(0, store.counted())
+    }
 }

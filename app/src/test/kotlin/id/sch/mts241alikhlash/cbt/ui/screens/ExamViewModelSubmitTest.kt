@@ -11,6 +11,8 @@ import id.sch.mts241alikhlash.cbt.data.model.SavedAnswerAckDto
 import id.sch.mts241alikhlash.cbt.data.model.SavedAnswerDto
 import id.sch.mts241alikhlash.cbt.data.model.SubmitRequest
 import id.sch.mts241alikhlash.cbt.data.model.SubmittedSessionDto
+import id.sch.mts241alikhlash.cbt.data.model.ViolationCountDto
+import id.sch.mts241alikhlash.cbt.data.model.ViolationReport
 import id.sch.mts241alikhlash.cbt.data.model.PaperQuestionDto
 import id.sch.mts241alikhlash.cbt.data.model.SaveAnswerRequest
 import id.sch.mts241alikhlash.cbt.data.remote.ExamApiService
@@ -300,6 +302,50 @@ class ExamViewModelSubmitTest {
         assertTrue(vm.uiState.value.isSubmitted)
         assertTrue(vm.uiState.value.violationExit)
         assertEquals(4, api.violations)
+    }
+
+    @Test
+    fun `each new violation is reported to the server at once`() = runTest {
+        val api = ViolationReportingApi()
+        val vm = viewModel(repoWithPending(0, api = api))
+        runCurrent()
+
+        vm.recordViolations(1)
+        runCurrent()
+        vm.recordViolations(2)
+        runCurrent()
+        vm.recordViolations(2)
+        runCurrent()
+
+        assertEquals(listOf(1, 2), api.reported)
+    }
+
+    @Test
+    fun `the count the server holds comes back into the state`() = runTest {
+        val api = ViolationReportingApi(serverCount = 3)
+        val vm = viewModel(repoWithPending(0, api = api))
+        runCurrent()
+
+        vm.recordViolations(0)
+        runCurrent()
+
+        assertEquals(3, vm.uiState.value.serverViolations)
+    }
+
+    @Test
+    fun `a report that failed is sent again with the next violation`() = runTest {
+        val api = ViolationReportingApi(failFirst = 1)
+        val vm = viewModel(repoWithPending(0, api = api))
+        runCurrent()
+
+        vm.recordViolations(1)
+        runCurrent()
+        assertEquals(emptyList<Int>(), api.reported)
+
+        vm.recordViolations(2)
+        runCurrent()
+
+        assertEquals(listOf(2), api.reported)
     }
 
     @Test
@@ -593,4 +639,35 @@ private class ViolationCapturingApi(private var failFirst: Int = 0) : ExamApiSer
         sessionId: String,
         request: SaveAnswerRequest
     ): SavedAnswerAckDto = answerDto(sessionId, request)
+}
+
+private class ViolationReportingApi(
+    private val serverCount: Int = 0,
+    private var failFirst: Int = 0
+) : ExamApiService {
+    val reported = mutableListOf<Int>()
+
+    override suspend fun getAnswers(sessionId: String): List<SavedAnswerDto> = emptyList()
+
+    override suspend fun submit(sessionId: String, request: SubmitRequest): SubmittedSessionDto =
+        SubmittedSessionDto("SUBMITTED")
+
+    override suspend fun getQuestions(sessionId: String): List<PaperQuestionDto> = emptyList()
+
+    override suspend fun saveAnswer(
+        sessionId: String,
+        request: SaveAnswerRequest
+    ): SavedAnswerAckDto = answerDto(sessionId, request)
+
+    override suspend fun reportViolations(
+        sessionId: String,
+        request: ViolationReport
+    ): ViolationCountDto {
+        if (failFirst > 0) {
+            failFirst--
+            throw IOException("offline")
+        }
+        if (request.count > 0) reported += request.count
+        return ViolationCountDto(maxOf(serverCount, request.count))
+    }
 }

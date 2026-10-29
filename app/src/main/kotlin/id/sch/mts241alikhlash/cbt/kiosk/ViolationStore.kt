@@ -14,7 +14,18 @@ class ViolationStore(context: Context) {
 
     fun count(): Int = prefs.getInt(KEY_COUNT, 0)
 
-    fun counted(): Int = entries().count { ViolationPolicy.counts(it.substringAfter('|')) }
+    /** Events seen on this device plus what the server already held when the app came back. */
+    fun counted(): Int =
+        entries().count { ViolationPolicy.counts(it.substringAfter('|')) } +
+            prefs.getInt(KEY_BASELINE, 0)
+
+    /** Raises the count to what the server holds; never lowers it. */
+    fun restore(serverCount: Int) {
+        val gap = serverCount - counted()
+        if (gap > 0) {
+            prefs.edit().putInt(KEY_BASELINE, prefs.getInt(KEY_BASELINE, 0) + gap).apply()
+        }
+    }
 
     fun beginSession(sessionId: String) {
         if (prefs.getString(KEY_SESSION, null) == sessionId) return
@@ -47,6 +58,7 @@ class ViolationStore(context: Context) {
 
     private companion object {
         const val KEY_COUNT = "count"
+        const val KEY_BASELINE = "baseline"
         const val KEY_LOG = "log"
         const val KEY_SESSION = "session"
         const val MAX_ENTRIES = 200

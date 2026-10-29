@@ -33,7 +33,8 @@ data class ExamUiState(
     val violationExit: Boolean = false,
     val deliveryWarning: String? = null,
     val lostMessage: String? = null,
-    val unsentAnswers: Int = 0
+    val unsentAnswers: Int = 0,
+    val serverViolations: Int = 0
 ) {
     /** Answers only make sense once a paper is on screen and not being submitted. */
     val canAnswer: Boolean get() = !isLoading && !isSubmitting && !isSubmitted && !isTimeOver && questions.isNotEmpty()
@@ -138,8 +139,28 @@ class ExamViewModel(
     private var violations = 0
     private var violationSubmitStarted = false
 
+    private var reportedViolations = -1
+    private var reportingViolations = false
+
+    private fun reportViolations() {
+        val count = violations
+        if (count <= reportedViolations || reportingViolations) return
+        reportingViolations = true
+        viewModelScope.launch {
+            val server = repository.reportViolations(sessionId, count)
+            reportingViolations = false
+            if (server == null) return@launch
+            reportedViolations = count
+            if (server > _uiState.value.serverViolations) {
+                _uiState.value = _uiState.value.copy(serverViolations = server)
+            }
+            reportViolations()
+        }
+    }
+
     fun recordViolations(count: Int) {
         violations = maxOf(violations, count)
+        reportViolations()
         if (!ViolationPolicy.exceeded(violations) || violationSubmitStarted) return
         val state = _uiState.value
         if (state.isSubmitted || state.lostMessage != null) return

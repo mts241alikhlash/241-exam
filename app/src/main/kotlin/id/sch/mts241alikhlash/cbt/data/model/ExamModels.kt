@@ -36,6 +36,16 @@ data class SubmitRequest(
 )
 
 @Serializable
+data class ViolationReport(
+    val count: Int
+)
+
+@Serializable
+data class ViolationCountDto(
+    val violationCount: Int
+)
+
+@Serializable
 data class SubmittedSessionDto(
     val status: String,
     val submittedAt: String? = null
