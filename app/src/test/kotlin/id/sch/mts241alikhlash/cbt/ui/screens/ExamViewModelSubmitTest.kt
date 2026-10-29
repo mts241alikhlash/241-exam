@@ -9,7 +9,10 @@ import id.sch.mts241alikhlash.cbt.data.local.CachedQuestionEntity
 import id.sch.mts241alikhlash.cbt.data.local.QuestionDao
 import id.sch.mts241alikhlash.cbt.data.model.SavedAnswerAckDto
 import id.sch.mts241alikhlash.cbt.data.model.SavedAnswerDto
+import id.sch.mts241alikhlash.cbt.data.model.SubmitRequest
 import id.sch.mts241alikhlash.cbt.data.model.SubmittedSessionDto
+import id.sch.mts241alikhlash.cbt.data.model.ViolationCountDto
+import id.sch.mts241alikhlash.cbt.data.model.ViolationReport
 import id.sch.mts241alikhlash.cbt.data.model.PaperQuestionDto
 import id.sch.mts241alikhlash.cbt.data.model.SaveAnswerRequest
 import id.sch.mts241alikhlash.cbt.data.remote.ExamApiService
@@ -283,6 +286,97 @@ class ExamViewModelSubmitTest {
         now = { testScheduler.currentTime }
     )
 
+    @Test
+    fun `more than three violations hand the exam in with the count`() = runTest {
+        val api = ViolationCapturingApi()
+        val vm = viewModel(repoWithPending(0, api = api))
+        runCurrent()
+
+        vm.recordViolations(3)
+        runCurrent()
+        assertFalse(vm.uiState.value.isSubmitted)
+
+        vm.recordViolations(4)
+        runCurrent()
+
+        assertTrue(vm.uiState.value.isSubmitted)
+        assertTrue(vm.uiState.value.violationExit)
+        assertEquals(4, api.violations)
+    }
+
+    @Test
+    fun `each new violation is reported to the server at once`() = runTest {
+        val api = ViolationReportingApi()
+        val vm = viewModel(repoWithPending(0, api = api))
+        runCurrent()
+
+        vm.recordViolations(1)
+        runCurrent()
+        vm.recordViolations(2)
+        runCurrent()
+        vm.recordViolations(2)
+        runCurrent()
+
+        assertEquals(listOf(1, 2), api.reported)
+    }
+
+    @Test
+    fun `the count the server holds comes back into the state`() = runTest {
+        val api = ViolationReportingApi(serverCount = 3)
+        val vm = viewModel(repoWithPending(0, api = api))
+        runCurrent()
+
+        vm.recordViolations(0)
+        runCurrent()
+
+        assertEquals(3, vm.uiState.value.serverViolations)
+    }
+
+    @Test
+    fun `a report that failed is sent again with the next violation`() = runTest {
+        val api = ViolationReportingApi(failFirst = 1)
+        val vm = viewModel(repoWithPending(0, api = api))
+        runCurrent()
+
+        vm.recordViolations(1)
+        runCurrent()
+        assertEquals(emptyList<Int>(), api.reported)
+
+        vm.recordViolations(2)
+        runCurrent()
+
+        assertEquals(listOf(2), api.reported)
+    }
+
+    @Test
+    fun `a normal hand-in still tells the server how often the student left`() = runTest {
+        val api = ViolationCapturingApi()
+        val vm = viewModel(repoWithPending(0, api = api))
+        runCurrent()
+
+        vm.recordViolations(2)
+        vm.submitExam()
+        runCurrent()
+
+        assertTrue(vm.uiState.value.isSubmitted)
+        assertFalse(vm.uiState.value.violationExit)
+        assertEquals(2, api.violations)
+    }
+
+    @Test
+    fun `a failed forced hand-in keeps trying until it goes through`() = runTest {
+        val api = ViolationCapturingApi(failFirst = 2)
+        val vm = viewModel(repoWithPending(0, api = api))
+        runCurrent()
+
+        vm.recordViolations(4)
+        runCurrent()
+        advanceTimeBySeconds(15)
+
+        assertTrue(vm.uiState.value.isSubmitted)
+        assertEquals(3, api.submitCalls)
+    }
+
     private fun TestScope.advanceTimeBySeconds(seconds: Long) {
         testScheduler.advanceTimeBy(seconds * 1000L)
         testScheduler.runCurrent()
@@ -407,7 +501,7 @@ private class SubmitFakeQuestionDao(
 private class SubmitFakeApi : ExamApiService {
     override suspend fun getAnswers(sessionId: String): List<SavedAnswerDto> = emptyList()
 
-    override suspend fun submit(sessionId: String): SubmittedSessionDto = SubmittedSessionDto("SUBMITTED")
+    override suspend fun submit(sessionId: String, request: SubmitRequest): SubmittedSessionDto = SubmittedSessionDto("SUBMITTED")
 
     override suspend fun getQuestions(sessionId: String): List<PaperQuestionDto> = emptyList()
 
@@ -421,7 +515,7 @@ private class SubmitFakeApi : ExamApiService {
 private class RecordingSubmitApi : ExamApiService {
     override suspend fun getAnswers(sessionId: String): List<SavedAnswerDto> = emptyList()
 
-    override suspend fun submit(sessionId: String): SubmittedSessionDto = SubmittedSessionDto("SUBMITTED")
+    override suspend fun submit(sessionId: String, request: SubmitRequest): SubmittedSessionDto = SubmittedSessionDto("SUBMITTED")
 
     override suspend fun getQuestions(sessionId: String): List<PaperQuestionDto> = emptyList()
 
@@ -434,7 +528,7 @@ private class RecordingSubmitApi : ExamApiService {
 private class BlockingSubmitApi : ExamApiService {
     override suspend fun getAnswers(sessionId: String): List<SavedAnswerDto> = emptyList()
 
-    override suspend fun submit(sessionId: String): SubmittedSessionDto = SubmittedSessionDto("SUBMITTED")
+    override suspend fun submit(sessionId: String, request: SubmitRequest): SubmittedSessionDto = SubmittedSessionDto("SUBMITTED")
 
     private val started = CompletableDeferred<Unit>()
     private val release = CompletableDeferred<Unit>()
@@ -462,7 +556,7 @@ private class RecordingQuestionsApi(
 ) : ExamApiService {
     override suspend fun getAnswers(sessionId: String): List<SavedAnswerDto> = emptyList()
 
-    override suspend fun submit(sessionId: String): SubmittedSessionDto = SubmittedSessionDto("SUBMITTED")
+    override suspend fun submit(sessionId: String, request: SubmitRequest): SubmittedSessionDto = SubmittedSessionDto("SUBMITTED")
 
     var uploadCount = 0
         private set
@@ -481,7 +575,7 @@ private class RecordingQuestionsApi(
 private class BlockingQuestionsApi : ExamApiService {
     override suspend fun getAnswers(sessionId: String): List<SavedAnswerDto> = emptyList()
 
-    override suspend fun submit(sessionId: String): SubmittedSessionDto = SubmittedSessionDto("SUBMITTED")
+    override suspend fun submit(sessionId: String, request: SubmitRequest): SubmittedSessionDto = SubmittedSessionDto("SUBMITTED")
 
     private val never = CompletableDeferred<Unit>()
     var uploadCount = 0
@@ -504,7 +598,7 @@ private class BlockingQuestionsApi : ExamApiService {
 private class FailingQuestionsApi(private val failFirst: Boolean = false) : ExamApiService {
     override suspend fun getAnswers(sessionId: String): List<SavedAnswerDto> = emptyList()
 
-    override suspend fun submit(sessionId: String): SubmittedSessionDto = SubmittedSessionDto("SUBMITTED")
+    override suspend fun submit(sessionId: String, request: SubmitRequest): SubmittedSessionDto = SubmittedSessionDto("SUBMITTED")
 
     var questionCalls = 0
         private set
@@ -522,3 +616,58 @@ private class FailingQuestionsApi(private val failFirst: Boolean = false) : Exam
 }
 
 private fun answerDto(sessionId: String, request: SaveAnswerRequest) = ackFor(request)
+
+private class ViolationCapturingApi(private var failFirst: Int = 0) : ExamApiService {
+    var violations = -1
+    var submitCalls = 0
+
+    override suspend fun getAnswers(sessionId: String): List<SavedAnswerDto> = emptyList()
+
+    override suspend fun submit(sessionId: String, request: SubmitRequest): SubmittedSessionDto {
+        submitCalls++
+        if (failFirst > 0) {
+            failFirst--
+            throw IOException("offline")
+        }
+        violations = request.violations
+        return SubmittedSessionDto("SUBMITTED")
+    }
+
+    override suspend fun getQuestions(sessionId: String): List<PaperQuestionDto> = emptyList()
+
+    override suspend fun saveAnswer(
+        sessionId: String,
+        request: SaveAnswerRequest
+    ): SavedAnswerAckDto = answerDto(sessionId, request)
+}
+
+private class ViolationReportingApi(
+    private val serverCount: Int = 0,
+    private var failFirst: Int = 0
+) : ExamApiService {
+    val reported = mutableListOf<Int>()
+
+    override suspend fun getAnswers(sessionId: String): List<SavedAnswerDto> = emptyList()
+
+    override suspend fun submit(sessionId: String, request: SubmitRequest): SubmittedSessionDto =
+        SubmittedSessionDto("SUBMITTED")
+
+    override suspend fun getQuestions(sessionId: String): List<PaperQuestionDto> = emptyList()
+
+    override suspend fun saveAnswer(
+        sessionId: String,
+        request: SaveAnswerRequest
+    ): SavedAnswerAckDto = answerDto(sessionId, request)
+
+    override suspend fun reportViolations(
+        sessionId: String,
+        request: ViolationReport
+    ): ViolationCountDto {
+        if (failFirst > 0) {
+            failFirst--
+            throw IOException("offline")
+        }
+        if (request.count > 0) reported += request.count
+        return ViolationCountDto(maxOf(serverCount, request.count))
+    }
+}

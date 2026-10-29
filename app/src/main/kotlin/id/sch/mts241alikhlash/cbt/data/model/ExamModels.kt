@@ -11,7 +11,10 @@ data class ExamSummaryDto(
     val endsAt: String,
     val durationMinutes: Int,
     val status: String,
-    val sessionId: String? = null
+    val sessionId: String? = null,
+    val subjectName: String? = null,
+    val type: String? = null,
+    val participantNumber: String? = null
 )
 
 @Serializable
@@ -25,6 +28,21 @@ data class StartedSessionDto(
     val sessionId: String,
     val deadline: Long,
     val serverTime: Long
+)
+
+@Serializable
+data class SubmitRequest(
+    val violations: Int = 0
+)
+
+@Serializable
+data class ViolationReport(
+    val count: Int
+)
+
+@Serializable
+data class ViolationCountDto(
+    val violationCount: Int
 )
 
 @Serializable

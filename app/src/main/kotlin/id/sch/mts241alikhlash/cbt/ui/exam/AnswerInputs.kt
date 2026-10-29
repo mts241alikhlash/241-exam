@@ -8,6 +8,12 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import id.sch.mts241alikhlash.cbt.ui.theme.WebTokens
+import id.sch.mts241alikhlash.cbt.ui.components.FloatingTextField
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -160,13 +166,14 @@ fun TrueFalseInput(selected: Boolean?, enabled: Boolean, onSelect: (Boolean) -> 
 @Composable
 fun TextAnswerInput(value: String, multiline: Boolean, enabled: Boolean, onChange: (String) -> Unit) {
     Column {
-        OutlinedTextField(
+        FloatingTextField(
             value = value,
             onValueChange = onChange,
+            label = if (multiline) "Jawaban Anda" else "Jawaban singkat",
             enabled = enabled,
             singleLine = !multiline,
-            minLines = if (multiline) 6 else 1,
-            placeholder = { Text(if (multiline) "Tulis jawaban Anda di sini" else "Tulis jawaban singkat") },
+            minHeight = if (multiline) 160.dp else WebTokens.ControlHeight,
+            labelBackground = WebTokens.Card,
             modifier = Modifier.fillMaxWidth()
         )
         if (value.length >= COUNTER_FROM) {
@@ -194,66 +201,74 @@ private fun ChoiceRow(
     images: ImageContext?,
     onClick: () -> Unit
 ) {
-    val badgeShape = if (multi) RoundedCornerShape(6.dp) else CircleShape
+    val shape = RoundedCornerShape(WebTokens.Radius)
+    val borderColor = if (selected) WebTokens.Primary else WebTokens.InputBorder
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 5.dp)
-            .clip(RoundedCornerShape(8.dp))
-            .border(
-                width = if (selected) 1.5.dp else 1.dp,
-                color = if (selected) BorderFocus else BorderSubtle,
-                shape = RoundedCornerShape(8.dp)
-            )
-            .background(if (selected) BrandNavySubtle else BrandSurface)
-            .clickable(enabled = enabled, onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 12.dp),
+            .padding(vertical = 3.dp)
+            .heightIn(min = WebTokens.ControlHeight)
+            .height(IntrinsicSize.Min)
+            .clip(shape)
+            .background(if (selected) WebTokens.Primary.copy(alpha = 0.06f) else WebTokens.Card)
+            .border(1.dp, borderColor, shape)
+            .clickable(enabled = enabled, onClick = onClick),
         verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
     ) {
         Box(
             modifier = Modifier
-                .size(28.dp)
-                .clip(badgeShape)
-                .background(if (selected) BrandNavy else BrandMuted)
-                .border(1.dp, if (selected) BrandNavy else BorderSubtle, badgeShape),
+                .width(WebTokens.ControlHeight)
+                .fillMaxHeight()
+                .background(if (selected) WebTokens.Primary else WebTokens.Foreground.copy(alpha = 0.04f)),
             contentAlignment = androidx.compose.ui.Alignment.Center
         ) {
             Text(
                 text = letter,
                 fontFamily = DMSansFontFamily,
-                fontWeight = FontWeight.Bold,
-                fontSize = 12.sp,
-                color = if (selected) Color.White else TextSecondary
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 13.sp,
+                color = if (selected) WebTokens.PrimaryForeground else WebTokens.MutedForeground
             )
         }
+        Box(
+            Modifier
+                .width(1.dp)
+                .fillMaxHeight()
+                .background(borderColor)
+        )
 
-        Spacer(modifier = Modifier.width(12.dp))
-
-        if (images != null) {
-            HtmlContent(
-                html = html,
-                sessionId = images.sessionId,
-                baseUrl = images.baseUrl,
-                imageLoader = images.imageLoader,
-                fontSize = 14,
-                modifier = Modifier.weight(1f)
-            )
-        } else {
-            Text(
-                text = html,
-                fontFamily = DMSansFontFamily,
-                fontSize = 14.sp,
-                color = if (selected) TextPrimary else TextSecondary,
-                modifier = Modifier.weight(1f)
-            )
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .padding(horizontal = 10.dp, vertical = 6.dp)
+        ) {
+            if (images != null) {
+                HtmlContent(
+                    html = html,
+                    sessionId = images.sessionId,
+                    baseUrl = images.baseUrl,
+                    imageLoader = images.imageLoader,
+                    fontSize = 14,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            } else {
+                Text(
+                    text = html,
+                    fontFamily = DMSansFontFamily,
+                    fontSize = 14.sp,
+                    color = WebTokens.Foreground
+                )
+            }
         }
 
         if (selected) {
             Icon(
                 imageVector = Icons.Default.Check,
                 contentDescription = null,
-                tint = BrandNavy,
-                modifier = Modifier.size(16.dp)
+                tint = WebTokens.Primary,
+                modifier = Modifier
+                    .padding(end = 10.dp)
+                    .size(14.dp)
             )
         }
     }

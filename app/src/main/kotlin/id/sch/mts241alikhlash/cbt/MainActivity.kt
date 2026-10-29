@@ -15,7 +15,8 @@ import id.sch.mts241alikhlash.cbt.data.auth.SupervisorResult
 import id.sch.mts241alikhlash.cbt.data.remote.userMessage
 import id.sch.mts241alikhlash.cbt.data.session.RestoreOutcome
 import id.sch.mts241alikhlash.cbt.data.session.startExamSession
-import id.sch.mts241alikhlash.cbt.ui.screens.ExamListScreen
+import id.sch.mts241alikhlash.cbt.ui.screens.HomeScreen
+import id.sch.mts241alikhlash.cbt.ui.screens.ProfileViewModel
 import id.sch.mts241alikhlash.cbt.ui.screens.ExamListViewModel
 import id.sch.mts241alikhlash.cbt.ui.screens.LoginScreen
 import id.sch.mts241alikhlash.cbt.ui.screens.LoginViewModel
@@ -24,6 +25,7 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import id.sch.mts241alikhlash.cbt.kiosk.ExamDeviceAdminReceiver
 import id.sch.mts241alikhlash.cbt.kiosk.KioskPolicy
+import id.sch.mts241alikhlash.cbt.kiosk.ViolationPolicy
 import id.sch.mts241alikhlash.cbt.kiosk.ViolationStore
 import id.sch.mts241alikhlash.cbt.ui.KioskWarningOverlay
 import id.sch.mts241alikhlash.cbt.ui.SupervisorExitDialog
@@ -43,6 +45,7 @@ class MainActivity : ComponentActivity() {
             field = value
             (application as? CBTApplication)?.examActive = value
         }
+    private val countedViolations = kotlinx.coroutines.flow.MutableStateFlow(0)
     private var showSupervisorExit by mutableStateOf(false)
     private var resumeCount by mutableIntStateOf(0)
     private var sessionRestored: Boolean? = null
@@ -69,10 +72,12 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        window.setFlags(
-            WindowManager.LayoutParams.FLAG_SECURE,
-            WindowManager.LayoutParams.FLAG_SECURE
-        )
+        if (!BuildConfig.DEBUG) {
+            window.setFlags(
+                WindowManager.LayoutParams.FLAG_SECURE,
+                WindowManager.LayoutParams.FLAG_SECURE
+            )
+        }
 
         val app = application as CBTApplication
         violations = ViolationStore(this)
@@ -135,6 +140,17 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
+            LaunchedEffect(appState.sessionId) {
+                val running = appState.sessionId
+                if (running != null && appState.activeExam == null) {
+                    val exam = runCatching { app.catalogRepository.listExams() }.getOrNull()
+                        ?.firstOrNull { it.sessionId == running }
+                    if (exam != null && appState.sessionId == running) {
+                        appState = appState.copy(activeExam = exam)
+                    }
+                }
+            }
+
             AssessmentAppRoot(
                 state = appState,
                 onRetryRestore = {
@@ -174,6 +190,7 @@ class MainActivity : ComponentActivity() {
                             appState = appState.copy(
                                 starting = false,
                                 selectedExam = null,
+                                activeExam = exam,
                                 sessionId = started.getOrThrow().sessionId,
                                 deadline = deadline
                             )
@@ -202,9 +219,18 @@ class MainActivity : ComponentActivity() {
                             initializer { ExamListViewModel(app.catalogRepository) }
                         }
                     )
-                    ExamListScreen(
-                        studentName = appState.user?.name.orEmpty(),
-                        viewModel = listViewModel,
+                    val profileViewModel = viewModel<ProfileViewModel>(
+                        key = "profile-${appState.user?.id}",
+                        factory = viewModelFactory {
+                            initializer {
+                                ProfileViewModel(app.profileRepository, appState.user?.name.orEmpty())
+                            }
+                        }
+                    )
+                    HomeScreen(
+                        userName = appState.user?.name.orEmpty(),
+                        listViewModel = listViewModel,
+                        profileViewModel = profileViewModel,
                         notice = appState.notice,
                         onSelect = { appState = appState.copy(selectedExam = it, startError = null, notice = null) },
                         onLogout = {
@@ -241,9 +267,22 @@ class MainActivity : ComponentActivity() {
                         }
                     )
 
+                    LaunchedEffect(sessionId) {
+                        violations.beginSession(sessionId)
+                        countedViolations.value = violations.counted()
+                    }
+                    val counted by countedViolations.collectAsState()
+                    LaunchedEffect(counted) { viewModel.recordViolations(counted) }
+                    val serverViolations by viewModel.uiState.collectAsState()
+                    LaunchedEffect(serverViolations.serverViolations) {
+                        violations.restore(serverViolations.serverViolations)
+                        countedViolations.value = violations.counted()
+                    }
+
                     ExamScreen(
                         viewModel = viewModel,
                         sessionId = sessionId,
+                        exam = appState.activeExam,
                         baseUrl = BuildConfig.BASE_URL,
                         imageLoader = app.imageLoader,
                         onSupervisorExit = { showSupervisorExit = true },
@@ -284,6 +323,7 @@ class MainActivity : ComponentActivity() {
                                 Toast.makeText(
                                     this@MainActivity,
                                     when {
+                                        viewModel.uiState.value.violationExit -> ViolationPolicy.warning(ViolationPolicy.LIMIT + 1)
                                         unsent > 0 -> "Ujian dikumpulkan, tetapi $unsent jawaban tidak sempat terkirim"
                                         ended -> "Ujian berhasil dikumpulkan"
                                         else -> "Ujian selesai, tetapi sesi gagal dibersihkan"
@@ -356,13 +396,15 @@ class MainActivity : ComponentActivity() {
         val power = getSystemService(android.os.PowerManager::class.java)
         val interactive = power?.isInteractive ?: true
         if (isExamActive && interactive) {
-            val total = violations.record("left_app")
-            Toast.makeText(
-                this,
-                "Peringatan: Dilarang keluar dari aplikasi ujian! ($total)",
-                Toast.LENGTH_SHORT
-            ).show()
+            violations.record("left_app")
+            warnAboutViolations()
         }
+    }
+
+    private fun warnAboutViolations() {
+        val counted = violations.counted()
+        countedViolations.value = counted
+        Toast.makeText(this, ViolationPolicy.warning(counted), Toast.LENGTH_LONG).show()
     }
 
     /** Test seam: toggles exam-active state without touching the UI tree. */
@@ -465,7 +507,10 @@ class MainActivity : ComponentActivity() {
             android.util.Log.i("MainActivity", "Pin state changed: secure=$secure (state=$state)")
             // Losing the pin during an exam is an integrity event: the student either
             // rejected the dialog or used the system escape gesture.
-            if (!secure && isExamActive) violations.record("pin_lost")
+            if (!secure && isExamActive) {
+                violations.record("pin_lost")
+                warnAboutViolations()
+            }
         }
         isPinned.value = secure
     }

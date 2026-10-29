@@ -67,6 +67,17 @@ class ExamSessionTeardownTest {
         assertFalse("old teardown must not purge the new session", purged)
         assertEquals("s2", sessionRepository.current())
     }
+
+    @Test
+    fun `session already cleared by the submit still purges the cache and succeeds`() = runTest {
+        val sessionRepository = SessionRepository(RecordingSessionStore())
+        val purged = mutableListOf<String>()
+
+        val ended = endExamSession(sessionRepository, "s1") { purged.add(it) }
+
+        assertTrue("a submit that cleared the session is a clean end", ended)
+        assertEquals(listOf("s1"), purged)
+    }
 }
 
 private class RecordingSessionStore : SessionStore {

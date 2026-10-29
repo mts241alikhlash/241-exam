@@ -59,6 +59,42 @@ class ExamListViewModelTest {
     }
 
     @Test
+    fun reload_replaces_a_stale_list_with_the_new_statuses() {
+        val api = Api { listOf(exam("e1", "OPEN")) }
+        val vm = viewModel(api)
+
+        api.result = { listOf(exam("e1", "FINISHED")) }
+        vm.reload()
+
+        assertEquals(ExamListUiState.Content(listOf(exam("e1", "FINISHED"))), vm.state.value)
+    }
+
+    @Test
+    fun reload_failure_keeps_the_last_list_with_a_notice() {
+        val api = Api { listOf(exam("e1", "OPEN")) }
+        val vm = viewModel(api)
+
+        api.result = { throw IOException("offline") }
+        vm.reload()
+
+        assertEquals(
+            ExamListUiState.Content(listOf(exam("e1", "OPEN")), "Tidak dapat terhubung ke server."),
+            vm.state.value
+        )
+    }
+
+    @Test
+    fun reload_unauthorized_drops_the_list() {
+        val api = Api { listOf(exam("e1", "OPEN")) }
+        val vm = viewModel(api)
+
+        api.result = { throw httpError(401) }
+        vm.reload()
+
+        assertEquals(true, (vm.state.value as ExamListUiState.Error).unauthorized)
+    }
+
+    @Test
     fun list_error_marks_unauthorized_on_401() {
         val vm = viewModel(Api { throw httpError(401) })
 

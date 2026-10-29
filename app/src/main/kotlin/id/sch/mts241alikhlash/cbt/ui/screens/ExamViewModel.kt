@@ -2,6 +2,7 @@ package id.sch.mts241alikhlash.cbt.ui.screens
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import id.sch.mts241alikhlash.cbt.kiosk.ViolationPolicy
 import id.sch.mts241alikhlash.cbt.data.model.AnswerPayload
 import id.sch.mts241alikhlash.cbt.data.model.PaperQuestionDto
 import id.sch.mts241alikhlash.cbt.data.remote.ApiException
@@ -29,9 +30,11 @@ data class ExamUiState(
     val submitError: String? = null,
     val isResumed: Boolean = false,
     val isTimeOver: Boolean = false,
+    val violationExit: Boolean = false,
     val deliveryWarning: String? = null,
     val lostMessage: String? = null,
-    val unsentAnswers: Int = 0
+    val unsentAnswers: Int = 0,
+    val serverViolations: Int = 0
 ) {
     /** Answers only make sense once a paper is on screen and not being submitted. */
     val canAnswer: Boolean get() = !isLoading && !isSubmitting && !isSubmitted && !isTimeOver && questions.isNotEmpty()
@@ -133,8 +136,45 @@ class ExamViewModel(
         }
     }
 
+    private var violations = 0
+    private var violationSubmitStarted = false
+
+    private var reportedViolations = -1
+    private var reportingViolations = false
+
+    private fun reportViolations() {
+        val count = violations
+        if (count <= reportedViolations || reportingViolations) return
+        reportingViolations = true
+        viewModelScope.launch {
+            val server = repository.reportViolations(sessionId, count)
+            reportingViolations = false
+            if (server == null) return@launch
+            reportedViolations = count
+            if (server > _uiState.value.serverViolations) {
+                _uiState.value = _uiState.value.copy(serverViolations = server)
+            }
+            reportViolations()
+        }
+    }
+
+    fun recordViolations(count: Int) {
+        violations = maxOf(violations, count)
+        reportViolations()
+        if (!ViolationPolicy.exceeded(violations) || violationSubmitStarted) return
+        val state = _uiState.value
+        if (state.isSubmitted || state.lostMessage != null) return
+        violationSubmitStarted = true
+        _uiState.value = state.copy(violationExit = true)
+        viewModelScope.launch { retrySubmit() }
+    }
+
     private suspend fun autoSubmit() {
         _uiState.value = _uiState.value.copy(isTimeOver = true)
+        retrySubmit()
+    }
+
+    private suspend fun retrySubmit() {
         var attempts = 0
         while (!_uiState.value.isSubmitted && _uiState.value.lostMessage == null && attempts < AUTO_SUBMIT_MAX_ATTEMPTS) {
             if (!_uiState.value.isSubmitting) {
@@ -252,7 +292,7 @@ class ExamViewModel(
                 )
                 false
             } else {
-                repository.submit(sessionId)
+                repository.submit(sessionId, violations)
                 onSubmitConfirmed(sessionId)
                 _uiState.value = _uiState.value.copy(
                     isSubmitting = false,
