@@ -23,6 +23,7 @@ import id.sch.mts241alikhlash.cbt.ui.screens.LoginViewModel
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
+import id.sch.mts241alikhlash.cbt.proctor.ProctorFactory
 import id.sch.mts241alikhlash.cbt.kiosk.ExamDeviceAdminReceiver
 import id.sch.mts241alikhlash.cbt.kiosk.KioskPolicy
 import id.sch.mts241alikhlash.cbt.kiosk.ViolationPolicy
@@ -282,6 +283,7 @@ class MainActivity : ComponentActivity() {
                     ExamScreen(
                         viewModel = viewModel,
                         sessionId = sessionId,
+                        proctor = remember { ProctorFactory.controller(applicationContext) },
                         exam = appState.activeExam,
                         baseUrl = BuildConfig.BASE_URL,
                         imageLoader = app.imageLoader,

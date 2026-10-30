@@ -1,5 +1,7 @@
 package id.sch.mts241alikhlash.cbt.ui.screens
 
+import id.sch.mts241alikhlash.cbt.proctor.ProctorController
+import kotlinx.coroutines.awaitCancellation
 import id.sch.mts241alikhlash.cbt.ui.exam.ImageContext
 import id.sch.mts241alikhlash.cbt.ui.exam.QuestionAnswerInput
 import id.sch.mts241alikhlash.cbt.ui.exam.isFilled
@@ -101,9 +103,21 @@ fun ExamScreen(
     imageLoader: coil3.ImageLoader?,
     onFinish: () -> Unit,
     onSupervisorExit: () -> Unit = {},
-    onSessionLost: (String) -> Unit = {}
+    onSessionLost: (String) -> Unit = {},
+    proctor: ProctorController = ProctorController()
 ) {
     val state by viewModel.uiState.collectAsState()
+
+    // The camera lives exactly as long as this screen: it starts when the exam is
+    // shown and stops on dispose, on submit, and on supervisor exit.
+    LaunchedEffect(sessionId, proctor) {
+        proctor.start(sessionId)
+        try {
+            awaitCancellation()
+        } finally {
+            proctor.stop()
+        }
+    }
     ExamContent(
         state = state,
         onAnswer = viewModel::selectAnswer,

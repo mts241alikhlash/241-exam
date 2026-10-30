@@ -45,6 +45,13 @@ class CBTApplication : Application() {
     lateinit var imageLoader: coil3.ImageLoader
         private set
 
+    lateinit var examApi: ExamApiService
+        private set
+
+    /** Exposed so a flavor-only feature can add endpoints without touching the shared service. */
+    lateinit var retrofit: Retrofit
+        private set
+
     @Volatile
     var examActive: Boolean = false
 
@@ -111,6 +118,8 @@ class CBTApplication : Application() {
             .build()
 
         val api = retrofit.create(ExamApiService::class.java)
+        examApi = api
+        this.retrofit = retrofit
         catalogRepository = ExamCatalogRepository(
             api = retrofit.create(ExamCatalogApiService::class.java),
             deviceId = { deviceId() }

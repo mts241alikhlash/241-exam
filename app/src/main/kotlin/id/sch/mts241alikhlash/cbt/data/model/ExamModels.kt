@@ -50,3 +50,15 @@ data class SubmittedSessionDto(
     val status: String,
     val submittedAt: String? = null
 )
+
+@Serializable
+data class StreamTokenDto(
+    val publishUrl: String,
+    val expiresAt: String,
+    val heartbeatSeconds: Int = 20
+)
+
+@Serializable
+data class CameraBlockedBody(
+    val reason: String
+)
