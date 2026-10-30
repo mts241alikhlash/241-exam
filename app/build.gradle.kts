@@ -102,6 +102,18 @@ android {
 
     }
 
+    flavorDimensions += "proctoring"
+    productFlavors {
+        create("standard") {
+            dimension = "proctoring"
+            buildConfigField("boolean", "PROCTORING_ENABLED", "false")
+        }
+        create("proctor") {
+            dimension = "proctoring"
+            buildConfigField("boolean", "PROCTORING_ENABLED", "true")
+        }
+    }
+
     signingConfigs {
         if (hasReleaseStoreFile) {
             create("release") {
@@ -145,8 +157,10 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-    kotlinOptions {
-        jvmTarget = "17"
+    kotlin {
+        compilerOptions {
+            jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+        }
     }
     buildFeatures {
         compose = true
@@ -200,6 +214,8 @@ dependencies {
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.androidx.datastore.preferences)
+
+    "proctorImplementation"(libs.rootencoder)
 
     debugImplementation(libs.androidx.ui.tooling)
 

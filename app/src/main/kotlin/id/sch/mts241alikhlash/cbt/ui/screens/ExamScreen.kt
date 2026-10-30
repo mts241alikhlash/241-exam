@@ -1,5 +1,7 @@
 package id.sch.mts241alikhlash.cbt.ui.screens
 
+import id.sch.mts241alikhlash.cbt.proctor.ProctorController
+import id.sch.mts241alikhlash.cbt.proctor.rememberProctorPermission
 import id.sch.mts241alikhlash.cbt.ui.exam.ImageContext
 import id.sch.mts241alikhlash.cbt.ui.exam.QuestionAnswerInput
 import id.sch.mts241alikhlash.cbt.ui.exam.isFilled
@@ -47,6 +49,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -101,10 +104,33 @@ fun ExamScreen(
     imageLoader: coil3.ImageLoader?,
     onFinish: () -> Unit,
     onSupervisorExit: () -> Unit = {},
-    onSessionLost: (String) -> Unit = {}
+    onSessionLost: (String) -> Unit = {},
+    proctor: ProctorController = ProctorController()
 ) {
     val state by viewModel.uiState.collectAsState()
-    ExamContent(
+
+    // The camera lives exactly as long as this screen: it starts once the camera
+    // permission is held and stops on dispose, on submit, and on supervisor exit.
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val cameraPermission = rememberProctorPermission(sessionId, proctor)
+    val permissionLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.RequestPermission(),
+    ) { granted -> if (granted) proctor.start(sessionId) }
+
+    DisposableEffect(proctor) {
+        onDispose { proctor.stop() }
+    }
+    androidx.compose.foundation.layout.Column {
+        id.sch.mts241alikhlash.cbt.proctor.CameraPermissionBanner(
+            state = cameraPermission,
+            onRequest = {
+                id.sch.mts241alikhlash.cbt.proctor.requestCameraAgain(
+                    context,
+                    cameraPermission,
+                ) { permissionLauncher.launch(android.Manifest.permission.CAMERA) }
+            },
+        )
+        ExamContent(
         state = state,
         onAnswer = viewModel::selectAnswer,
         onToggleKey = viewModel::toggleKey,
@@ -120,7 +146,8 @@ fun ExamScreen(
         exam = exam,
         baseUrl = baseUrl,
         imageLoader = imageLoader
-    )
+        )
+    }
 }
 
 @Composable

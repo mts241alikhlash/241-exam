@@ -23,6 +23,7 @@ import id.sch.mts241alikhlash.cbt.ui.screens.LoginViewModel
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
+import id.sch.mts241alikhlash.cbt.proctor.ProctorFactory
 import id.sch.mts241alikhlash.cbt.kiosk.ExamDeviceAdminReceiver
 import id.sch.mts241alikhlash.cbt.kiosk.KioskPolicy
 import id.sch.mts241alikhlash.cbt.kiosk.ViolationPolicy
@@ -83,6 +84,11 @@ class MainActivity : ComponentActivity() {
         violations = ViolationStore(this)
 
         setContent {
+            // Asked once, at first launch, not when an exam starts: a permission
+            // dialog over a running exam is the worst possible moment for it, and
+            // the answer here covers every later session.
+            id.sch.mts241alikhlash.cbt.proctor.RequestCameraOnLaunch()
+
             var appState by remember { mutableStateOf(AppRootState()) }
             var restoreAttempt by remember { mutableStateOf(0) }
 
@@ -282,6 +288,7 @@ class MainActivity : ComponentActivity() {
                     ExamScreen(
                         viewModel = viewModel,
                         sessionId = sessionId,
+                        proctor = remember { ProctorFactory.controller(applicationContext) },
                         exam = appState.activeExam,
                         baseUrl = BuildConfig.BASE_URL,
                         imageLoader = app.imageLoader,
