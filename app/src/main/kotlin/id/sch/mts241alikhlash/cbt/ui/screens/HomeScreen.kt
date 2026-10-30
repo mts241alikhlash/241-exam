@@ -4,6 +4,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -29,12 +30,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
@@ -55,6 +58,10 @@ import androidx.compose.ui.unit.sp
 import id.sch.mts241alikhlash.cbt.BuildConfig
 import id.sch.mts241alikhlash.cbt.R
 import id.sch.mts241alikhlash.cbt.data.model.ExamSummaryDto
+import id.sch.mts241alikhlash.cbt.ui.components.ActionButton
+import id.sch.mts241alikhlash.cbt.ui.components.ActionStyle
+import id.sch.mts241alikhlash.cbt.ui.components.AppDialog
+import id.sch.mts241alikhlash.cbt.ui.components.rememberIsOnline
 import id.sch.mts241alikhlash.cbt.ui.theme.DMSansFontFamily
 import id.sch.mts241alikhlash.cbt.ui.theme.WebTokens
 import kotlinx.coroutines.launch
@@ -62,10 +69,12 @@ import kotlinx.coroutines.launch
 private enum class HomeSection(val title: String, val icon: DrawerIcon) {
     Exams("Daftar Ujian", DrawerIcon.Exams),
     Schedule("Jadwal Ujian", DrawerIcon.Schedule),
-    Profile("Profil Saya", DrawerIcon.Profile)
+    Profile("Profil Saya", DrawerIcon.Profile),
+    Rules("Tata Tertib", DrawerIcon.Rules),
+    Guide("Panduan Aplikasi", DrawerIcon.Guide)
 }
 
-private enum class DrawerIcon { Exams, Schedule, Profile, Logout }
+private enum class DrawerIcon { Exams, Schedule, Profile, Rules, Guide, Logout }
 
 @Composable
 fun HomeScreen(
@@ -88,12 +97,43 @@ fun HomeScreen(
     val identityFields = listOfNotNull(
         profile?.let { "NIS" to it.nis },
         profile?.classLabel?.let { "Kelas" to it },
-        profile?.academicYear?.let { "Tahun ajaran" to it },
+        semesterLabel(profile?.semester, profile?.academicYear)?.let { "Semester" to it },
         participantNumber?.let { "No. peserta" to it }
     )
+    val examStatus = (listState as? ExamListUiState.Content)?.exams?.let(::examStatusSummary)
+    val online = rememberIsOnline()
+    var confirmLogout by remember { mutableStateOf(false) }
 
-    BackHandler(enabled = section == HomeSection.Profile && !drawerState.isOpen) {
+    BackHandler(enabled = section != HomeSection.Exams && !drawerState.isOpen) {
         section = HomeSection.Exams
+    }
+
+    if (confirmLogout) {
+        AppDialog(
+            title = "Keluar dari akun?",
+            onDismiss = { confirmLogout = false },
+            footerStart = {
+                ActionButton(text = "Batal", style = ActionStyle.Outline, onClick = { confirmLogout = false })
+            },
+            footerEnd = {
+                ActionButton(
+                    text = "Keluar",
+                    style = ActionStyle.Destructive,
+                    onClick = {
+                        confirmLogout = false
+                        scope.launch { drawerState.close() }
+                        onLogout()
+                    }
+                )
+            }
+        ) {
+            Text(
+                text = "Anda perlu masuk lagi untuk memakai aplikasi.",
+                fontSize = 13.sp,
+                fontFamily = DMSansFontFamily,
+                color = WebTokens.Foreground
+            )
+        }
     }
 
     ModalNavigationDrawer(
@@ -121,9 +161,10 @@ fun HomeScreen(
                         DrawerHeader(
                             name = profile?.name ?: userName,
                             initials = profile?.initials ?: userName.take(1).uppercase().ifEmpty { "?" },
-                            fields = identityFields
+                            fields = identityFields,
+                            status = examStatus,
+                            online = online
                         )
-                        Spacer(Modifier.height(8.dp))
                         HomeSection.entries.forEach { entry ->
                             DrawerItem(
                                 label = entry.title,
@@ -136,18 +177,13 @@ fun HomeScreen(
                             )
                         }
                         Spacer(Modifier.weight(1f))
-                        DrawerItem(
-                            label = "Keluar",
-                            icon = DrawerIcon.Logout,
-                            selected = false,
-                            destructive = true,
-                            onClick = {
-                                scope.launch { drawerState.close() }
-                                onLogout()
-                            }
+                        Box(Modifier.fillMaxWidth().height(1.dp).background(WebTokens.Border))
+                        LogoutButton(
+                            onClick = { confirmLogout = true },
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 16.dp)
                         )
                         Column(
-                            modifier = Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 20.dp),
+                            modifier = Modifier.fillMaxWidth().padding(bottom = 20.dp),
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
                             Image(
@@ -197,6 +233,14 @@ fun HomeScreen(
                     HomeSection.Schedule -> ScheduleScreen(listViewModel)
 
                     HomeSection.Profile -> ProfileScreen(profileViewModel)
+
+                    HomeSection.Rules -> HelpScreen(
+                        topics = examRules
+                    )
+
+                    HomeSection.Guide -> HelpScreen(
+                        topics = appGuide
+                    )
                 }
                 if (section == HomeSection.Exams) {
                     RefreshButton(
@@ -304,16 +348,22 @@ private fun MenuGlyph() {
 }
 
 @Composable
-private fun DrawerHeader(name: String, initials: String, fields: List<Pair<String, String>>) {
+private fun DrawerHeader(
+    name: String,
+    initials: String,
+    fields: List<Pair<String, String>>,
+    status: String?,
+    online: Boolean
+) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .background(WebTokens.Primary)
             .padding(start = 24.dp, end = 24.dp, top = 36.dp, bottom = 22.dp)
     ) {
-        Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-            Avatar(initials, size = 64)
-            Spacer(Modifier.height(12.dp))
+        Row(verticalAlignment = Alignment.Top) {
+            Avatar(initials, size = 52)
+            Spacer(Modifier.width(14.dp))
             Text(
                 text = name,
                 fontSize = 17.sp,
@@ -321,10 +371,45 @@ private fun DrawerHeader(name: String, initials: String, fields: List<Pair<Strin
                 fontFamily = DMSansFontFamily,
                 letterSpacing = (-0.2).sp,
                 color = WebTokens.PrimaryForeground,
-                textAlign = TextAlign.Center
+                maxLines = 2,
+                modifier = Modifier.weight(1f).padding(top = 14.dp)
+            )
+            Spacer(Modifier.width(10.dp))
+            Row(
+                modifier = Modifier.padding(top = 2.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                if (!online) {
+                    Text(
+                        text = "Offline",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Medium,
+                        fontFamily = DMSansFontFamily,
+                        color = WebTokens.PrimaryForeground.copy(alpha = 0.85f)
+                    )
+                    Spacer(Modifier.width(6.dp))
+                }
+                Box(
+                    Modifier
+                        .size(8.dp)
+                        .background(if (online) Color(0xFF6EE7A0) else Color(0xFFFCA5A5), CircleShape)
+                )
+            }
+        }
+        if (status != null) {
+            Spacer(Modifier.height(14.dp))
+            Text(
+                text = status,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Medium,
+                fontFamily = DMSansFontFamily,
+                color = WebTokens.PrimaryForeground,
+                modifier = Modifier
+                    .background(WebTokens.PrimaryForeground.copy(alpha = 0.14f), RoundedCornerShape(50))
+                    .padding(horizontal = 12.dp, vertical = 5.dp)
             )
         }
-        if (fields.isNotEmpty()) Spacer(Modifier.height(20.dp))
+        if (fields.isNotEmpty()) Spacer(Modifier.height(16.dp))
         fields.forEach { (label, value) ->
             Row(
                 modifier = Modifier.fillMaxWidth().padding(vertical = 5.dp),
@@ -347,6 +432,31 @@ private fun DrawerHeader(name: String, initials: String, fields: List<Pair<Strin
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun LogoutButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
+    val shape = RoundedCornerShape(WebTokens.Radius)
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(44.dp)
+            .clip(shape)
+            .border(1.dp, WebTokens.Destructive.copy(alpha = 0.55f), shape)
+            .clickable(role = Role.Button, onClick = onClick),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(Modifier.size(18.dp)) { DrawerGlyph(DrawerIcon.Logout, WebTokens.Destructive) }
+        Spacer(Modifier.width(10.dp))
+        Text(
+            text = "Keluar",
+            fontSize = 14.sp,
+            fontWeight = FontWeight.SemiBold,
+            fontFamily = DMSansFontFamily,
+            color = WebTokens.Destructive
+        )
     }
 }
 
@@ -418,6 +528,31 @@ private fun DrawerGlyph(icon: DrawerIcon, color: Color) {
                     color, startAngle = 180f, sweepAngle = 180f, useCenter = false,
                     topLeft = Offset(w * 0.14f, h * 0.58f), size = Size(w * 0.72f, h * 0.7f), style = stroke
                 )
+            }
+
+            DrawerIcon.Rules -> {
+                val shield = Path().apply {
+                    moveTo(w * 0.5f, h * 0.08f)
+                    lineTo(w * 0.86f, h * 0.22f)
+                    lineTo(w * 0.86f, h * 0.52f)
+                    cubicTo(w * 0.86f, h * 0.76f, w * 0.66f, h * 0.9f, w * 0.5f, h * 0.96f)
+                    cubicTo(w * 0.34f, h * 0.9f, w * 0.14f, h * 0.76f, w * 0.14f, h * 0.52f)
+                    lineTo(w * 0.14f, h * 0.22f)
+                    close()
+                }
+                drawPath(shield, color, style = stroke)
+                drawLine(color, Offset(w * 0.34f, h * 0.5f), Offset(w * 0.46f, h * 0.62f), stroke.width, StrokeCap.Round)
+                drawLine(color, Offset(w * 0.46f, h * 0.62f), Offset(w * 0.68f, h * 0.38f), stroke.width, StrokeCap.Round)
+            }
+
+            DrawerIcon.Guide -> {
+                drawRoundRect(
+                    color, topLeft = Offset(w * 0.14f, h * 0.1f), size = Size(w * 0.72f, h * 0.8f),
+                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(w * 0.1f), style = stroke
+                )
+                drawLine(color, Offset(w * 0.32f, h * 0.1f), Offset(w * 0.32f, h * 0.9f), stroke.width, StrokeCap.Round)
+                drawLine(color, Offset(w * 0.46f, h * 0.34f), Offset(w * 0.7f, h * 0.34f), stroke.width, StrokeCap.Round)
+                drawLine(color, Offset(w * 0.46f, h * 0.52f), Offset(w * 0.7f, h * 0.52f), stroke.width, StrokeCap.Round)
             }
 
             DrawerIcon.Logout -> {
