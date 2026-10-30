@@ -180,6 +180,9 @@ class ProctorService : Service() {
     }
 
     private fun reasonFor(reason: String): String = when (reason) {
+        // Another app holding the camera is not a network problem, and a supervisor
+        // reading "jaringan bermasalah" would chase the wrong cause.
+        "camera_busy" -> "cameraBusy"
         "auth", "network" -> "network"
         "prepare" -> "permission"
         "disconnected" -> "stopped"

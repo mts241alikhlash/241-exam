@@ -9,12 +9,16 @@ import com.pedro.encoder.input.video.CameraHelper
 import com.pedro.library.whip.WhipStream
 
 /**
- * The camera and the SRT connection, wrapped so the service never touches
+ * The camera and the WHIP connection, wrapped so the service never touches
  * encoder types directly.
  *
  * WHIP: both RTMP and SRT opened their socket and reported success while sending
  * no media, so the server saw a connection and then EOF. WHIP publishes over
  * HTTP, which is the transport this design picked in the first place.
+ *
+ * A camera held by another app (a video call, the system camera) makes the
+ * source fail to open. That ends the stream with reason `camera_busy`, which the
+ * service reports as `cameraBusy` and retries — it never takes the exam down.
  */
 class StreamClient(
     context: Context,
@@ -39,7 +43,13 @@ class StreamClient(
 
             override fun onConnectionFailed(reason: String) {
                 proctorLog("conn failed: $reason")
-                onEnded(reason)
+                // "sps or pps is null" and the camera-open failures both mean the
+                // source never delivered a frame, which on a phone almost always
+                // means another app holds the camera.
+                val busy = reason.contains("sps or pps", ignoreCase = true) ||
+                    reason.contains("camera", ignoreCase = true) ||
+                    reason.contains("access", ignoreCase = true)
+                onEnded(if (busy) "camera_busy" else reason)
             }
 
             override fun onNewBitrate(bitrate: Long) = Unit
