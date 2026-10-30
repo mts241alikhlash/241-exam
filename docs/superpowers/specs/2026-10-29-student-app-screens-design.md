@@ -17,7 +17,7 @@ After the login moved to web parity (see `2026-10-29-web-parity-login-design.md`
 
 ## Screens
 
-- **Home:** square drawer (profile header, Daftar Ujian, Jadwal Ujian, Profil Saya, Keluar), school logo in the top bar, floating reload button. The list keeps the stale list with a message when a reload fails.
+- **Home:** square drawer, school logo in the top bar, floating reload button. The drawer header is left-aligned: avatar and name, a pill with the exam status (running, open, next or none), NIS, class and semester with academic year, and a connection dot at the top right (red with "Offline" when there is no network). The menu is Daftar Ujian, Jadwal Ujian, Profil Saya, Tata Tertib and Panduan Aplikasi, attached to the header with no gap. Tata Tertib opens with the violation limit; Panduan Aplikasi follows the exam from sign-in to hand-in. Both are numbered cards without intro text. Keluar is an outlined red button at the bottom that asks for confirmation. The list keeps the stale list with a message when a reload fails.
 - **Exam list:** groups "Bisa dikerjakan", "Akan datang", "Selesai", one card each; rows expand except finished ones; title is `JENIS - Mapel` (`displayTitle`); upcoming rows show "Dibuka dalam N".
 - **Jadwal Ujian:** one card per exam type in the order UTS, UAS, UH, Quiz, Tugas, then others; inside, a day subheader and one row per subject; tapping a row opens a detail dialog. Finished exams are left out.
 - **Token page:** fixed hero, token card, "Detail ujian" card; system back returns to the list.
