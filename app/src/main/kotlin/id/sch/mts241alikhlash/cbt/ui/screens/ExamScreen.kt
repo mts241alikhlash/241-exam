@@ -1,7 +1,7 @@
 package id.sch.mts241alikhlash.cbt.ui.screens
 
 import id.sch.mts241alikhlash.cbt.proctor.ProctorController
-import kotlinx.coroutines.awaitCancellation
+import id.sch.mts241alikhlash.cbt.proctor.rememberProctorPermission
 import id.sch.mts241alikhlash.cbt.ui.exam.ImageContext
 import id.sch.mts241alikhlash.cbt.ui.exam.QuestionAnswerInput
 import id.sch.mts241alikhlash.cbt.ui.exam.isFilled
@@ -49,6 +49,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -108,15 +109,11 @@ fun ExamScreen(
 ) {
     val state by viewModel.uiState.collectAsState()
 
-    // The camera lives exactly as long as this screen: it starts when the exam is
-    // shown and stops on dispose, on submit, and on supervisor exit.
-    LaunchedEffect(sessionId, proctor) {
-        proctor.start(sessionId)
-        try {
-            awaitCancellation()
-        } finally {
-            proctor.stop()
-        }
+    // The camera lives exactly as long as this screen: it starts once the camera
+    // permission is held and stops on dispose, on submit, and on supervisor exit.
+    rememberProctorPermission(sessionId, proctor)
+    DisposableEffect(proctor) {
+        onDispose { proctor.stop() }
     }
     ExamContent(
         state = state,

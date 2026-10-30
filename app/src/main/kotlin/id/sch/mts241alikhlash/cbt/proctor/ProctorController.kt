@@ -10,9 +10,13 @@ package id.sch.mts241alikhlash.cbt.proctor
 class ProctorController(
     private val startStream: (sessionId: String) -> Unit = {},
     private val stopStream: () -> Unit = {},
+    private val reportBlocked: (sessionId: String, reason: String) -> Unit = { _, _ -> },
 ) {
 
     fun start(sessionId: String) = startStream(sessionId)
 
     fun stop() = stopStream()
+
+    /** Records why the camera is not streaming. Never counts as a violation. */
+    fun blocked(sessionId: String, reason: String) = reportBlocked(sessionId, reason)
 }

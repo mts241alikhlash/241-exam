@@ -9,6 +9,9 @@ object ProctorFactory {
         return ProctorController(
             startStream = { sessionId -> ProctorService.start(app, sessionId) },
             stopStream = { ProctorService.stop(app) },
+            reportBlocked = { sessionId, reason ->
+                ProctorReporter.report(app, sessionId, reason)
+            },
         )
     }
 }

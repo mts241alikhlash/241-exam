@@ -21,11 +21,16 @@ class ProctorControllerTest {
         val controller = ProctorController(
             startStream = { calls += "start:$it" },
             stopStream = { calls += "stop" },
+            reportBlocked = { id, reason -> calls += "blocked:$id:$reason" },
         )
 
         controller.start("session-1")
+        controller.blocked("session-1", "permission")
         controller.stop()
 
-        assertEquals(listOf("start:session-1", "stop"), calls)
+        assertEquals(
+            listOf("start:session-1", "blocked:session-1:permission", "stop"),
+            calls,
+        )
     }
 }

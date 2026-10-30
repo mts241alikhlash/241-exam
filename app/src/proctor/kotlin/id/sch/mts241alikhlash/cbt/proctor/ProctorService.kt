@@ -82,7 +82,13 @@ class ProctorService : Service() {
             Intent(this, MainActivity::class.java),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
-        val notification: Notification = Notification.Builder(this, CHANNEL_ID)
+        val builder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            Notification.Builder(this, CHANNEL_ID)
+        } else {
+            @Suppress("DEPRECATION")
+            Notification.Builder(this)
+        }
+        val notification: Notification = builder
             .setContentTitle(getString(R.string.proctor_notification_title))
             .setContentText(getString(R.string.proctor_notification_text))
             .setSmallIcon(android.R.drawable.presence_video_online)
@@ -192,7 +198,11 @@ class ProctorService : Service() {
         fun start(context: Context, sessionId: String) {
             val intent = Intent(context, ProctorService::class.java)
                 .putExtra(EXTRA_SESSION_ID, sessionId)
-            context.startForegroundService(intent)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                context.startForegroundService(intent)
+            } else {
+                context.startService(intent)
+            }
         }
 
         fun stop(context: Context) {
