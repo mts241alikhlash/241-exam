@@ -84,6 +84,11 @@ class MainActivity : ComponentActivity() {
         violations = ViolationStore(this)
 
         setContent {
+            // Asked once, at first launch, not when an exam starts: a permission
+            // dialog over a running exam is the worst possible moment for it, and
+            // the answer here covers every later session.
+            id.sch.mts241alikhlash.cbt.proctor.RequestCameraOnLaunch()
+
             var appState by remember { mutableStateOf(AppRootState()) }
             var restoreAttempt by remember { mutableStateOf(0) }
 

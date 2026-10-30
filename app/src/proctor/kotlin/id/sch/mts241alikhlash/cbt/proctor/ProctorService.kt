@@ -11,6 +11,7 @@ import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
+import java.io.File
 import android.util.Log
 import id.sch.mts241alikhlash.cbt.MainActivity
 import id.sch.mts241alikhlash.cbt.R
@@ -49,6 +50,8 @@ class ProctorService : Service() {
             return START_NOT_STICKY
         }
 
+        proctorLogFile = File(filesDir, "proctor.log")
+        proctorLog("service start session=$sessionId")
         startInForeground()
         acquireWakelock()
         publish(sessionId)
@@ -114,7 +117,9 @@ class ProctorService : Service() {
             var failingSince = 0L
 
             while (isActive) {
+                proctorLog("fetching token")
                 val token = runCatching { fetchToken(sessionId) }.getOrNull()
+                proctorLog("token=${token != null}")
                 if (token == null) {
                     attempt++
                     if (failingSince == 0L) failingSince = System.currentTimeMillis()
@@ -128,9 +133,21 @@ class ProctorService : Service() {
                     ended.complete(reason)
                 }
                 stream = client
+                proctorLog("publishing to ${token.publishUrl.substringBefore('?')}")
                 client.publish(token.publishUrl)
 
+                // The token call is also the heartbeat the supervisor grid reads, so
+                // it has to keep running while the stream is up. Without this the seat
+                // turns red a minute into a stream that is still publishing.
+                val heartbeat = scope.launch {
+                    while (isActive) {
+                        delay(token.heartbeatSeconds * 1000L)
+                        runCatching { ProctorApi.service(this@ProctorService).streamHeartbeat(sessionId) }
+                    }
+                }
+
                 val reason = ended.await()
+                heartbeat.cancel()
                 Log.i(TAG, "stream ended: $reason")
                 client.stop()
                 stream = null

@@ -17,6 +17,10 @@ interface ProctorApiService {
     @POST("student-exams/{sessionId}/stream-token")
     suspend fun streamToken(@Path("sessionId") sessionId: String): StreamTokenDto
 
+    /** Keeps the seat live without rotating the publish token the stream uses. */
+    @POST("student-exams/{sessionId}/stream-heartbeat")
+    suspend fun streamHeartbeat(@Path("sessionId") sessionId: String)
+
     @POST("student-exams/{sessionId}/camera-blocked")
     suspend fun reportCameraBlocked(
         @Path("sessionId") sessionId: String,

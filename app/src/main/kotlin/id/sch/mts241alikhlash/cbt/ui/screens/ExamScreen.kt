@@ -111,11 +111,26 @@ fun ExamScreen(
 
     // The camera lives exactly as long as this screen: it starts once the camera
     // permission is held and stops on dispose, on submit, and on supervisor exit.
-    rememberProctorPermission(sessionId, proctor)
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val cameraPermission = rememberProctorPermission(sessionId, proctor)
+    val permissionLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.RequestPermission(),
+    ) { granted -> if (granted) proctor.start(sessionId) }
+
     DisposableEffect(proctor) {
         onDispose { proctor.stop() }
     }
-    ExamContent(
+    androidx.compose.foundation.layout.Column {
+        id.sch.mts241alikhlash.cbt.proctor.CameraPermissionBanner(
+            state = cameraPermission,
+            onRequest = {
+                id.sch.mts241alikhlash.cbt.proctor.requestCameraAgain(
+                    context,
+                    cameraPermission,
+                ) { permissionLauncher.launch(android.Manifest.permission.CAMERA) }
+            },
+        )
+        ExamContent(
         state = state,
         onAnswer = viewModel::selectAnswer,
         onToggleKey = viewModel::toggleKey,
@@ -131,7 +146,8 @@ fun ExamScreen(
         exam = exam,
         baseUrl = baseUrl,
         imageLoader = imageLoader
-    )
+        )
+    }
 }
 
 @Composable
