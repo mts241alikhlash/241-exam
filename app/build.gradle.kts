@@ -102,6 +102,18 @@ android {
 
     }
 
+    flavorDimensions += "proctoring"
+    productFlavors {
+        create("standard") {
+            dimension = "proctoring"
+            buildConfigField("boolean", "PROCTORING_ENABLED", "false")
+        }
+        create("proctor") {
+            dimension = "proctoring"
+            buildConfigField("boolean", "PROCTORING_ENABLED", "true")
+        }
+    }
+
     signingConfigs {
         if (hasReleaseStoreFile) {
             create("release") {
