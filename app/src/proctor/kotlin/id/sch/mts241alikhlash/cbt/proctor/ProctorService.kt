@@ -23,6 +23,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
@@ -146,7 +147,12 @@ class ProctorService : Service() {
                     }
                 }
 
-                val reason = ended.await()
+                // ICE can hang: WHIP answers 201, no track ever arrives, and none of
+                // the callbacks fire. Without this wait the loop stalls here forever,
+                // retries stop and the seat keeps a live heartbeat with no video.
+                val reason = withTimeoutOrNull(StreamRetry.ICE_TIMEOUT_MS) {
+                    ended.await()
+                } ?: "ice_timeout"
                 heartbeat.cancel()
                 Log.i(TAG, "stream ended: $reason")
                 client.stop()

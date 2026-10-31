@@ -28,4 +28,13 @@ class StreamRetryTest {
         assertEquals(1_000L, StreamRetry.delayFor(0))
         assertEquals(1_000L, StreamRetry.delayFor(-4))
     }
+
+    @Test
+    fun `the ICE wait is shorter than the report threshold`() {
+        // A stalled ICE handshake must give up before the seat is reported blocked,
+        // otherwise the first retry never happens and the grid keeps spinning.
+        assert(StreamRetry.ICE_TIMEOUT_MS in 1..StreamRetry.REPORT_AFTER_MS) {
+            "ICE_TIMEOUT_MS=${StreamRetry.ICE_TIMEOUT_MS} must sit within REPORT_AFTER_MS=${StreamRetry.REPORT_AFTER_MS}"
+        }
+    }
 }

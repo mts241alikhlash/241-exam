@@ -10,4 +10,10 @@ object StreamRetry {
 
     /** How long a failing stream may keep retrying before it reports itself blocked. */
     const val REPORT_AFTER_MS = 60_000L
+
+    /**
+     * How long to wait for the first track before treating the stream as dead.
+     * ICE that never connects produces no callback, so the wait needs a ceiling.
+     */
+    const val ICE_TIMEOUT_MS = 15_000L
 }
